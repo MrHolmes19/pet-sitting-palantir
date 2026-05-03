@@ -10,12 +10,22 @@ Build a low-cost personal scraper and alerting system for KiwiHouseSitters listi
 
 - Keep this file generic. Put topic-specific decisions in the relevant context file.
 - Use progressive disclosure: open only the docs needed for the current task.
+- Treat context and tool calls as a scarce budget. Prefer the smallest high-signal check that can answer the task correctly.
 - Update docs when a product or architecture decision changes.
 - Prefer simple, low-maintenance implementation choices.
 - Use `uv` for Python dependency management and command execution.
 - Avoid unexplained hardcoded values. Put reusable values in named constants close to the module that owns them.
 - When changing database migrations or data contracts, always verify `docs/contracts`, `docs/agent-context/data-model.md`, and `supabase/migrations` stay in sync.
 - Format JSON Schema files for human review: use expanded indentation, put examples only at the schema level, and reference nested structures with `$ref` instead of duplicating them inline.
+
+## Speed And Scope Control
+
+- Match effort to task size. For small wording fixes, simple renames, obvious rollbacks, or user corrections, make the minimal patch and run at most a targeted `rg` or focused test.
+- Do not run full test suites for docs-only changes unless the docs are generated, schema-validated, or explicitly tied to tests.
+- Do not broadly inspect unrelated files when the user asks for a narrow change and the affected files are already known.
+- If a request says "fast", "minimal", "just", "only", or "quick", skip broad exploration and explain any skipped verification briefly.
+- Prefer targeted verification first. Escalate to full `uv --cache-dir .uv-cache run pytest` only when code behavior, contracts, migrations, or shared parsing logic changed.
+- If a task starts taking longer than expected because scope is expanding, stop and report the exact blocker or ask whether to continue deeper.
 
 ## Load Context By Task
 
@@ -34,3 +44,9 @@ Build a low-cost personal scraper and alerting system for KiwiHouseSitters listi
 - Prefer small, testable increments.
 - Preserve scraping fixtures once they exist; parser changes should be fixture-tested.
 - Favor simple operational reliability over premature analytics features.
+
+## Code Review
+
+- Use `gh pr diff <number>` to get diffs. If no PR exists, use `git diff <base>...HEAD`.
+- Skip `uv.lock` and any other lock files entirely; they are noise in reviews.
+- Read changed source files directly with a file reader rather than parsing the full raw diff when the diff is large.
