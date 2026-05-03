@@ -11,12 +11,14 @@ class FakeResponse:
 
 
 class FakeSession:
-    def __init__(self, response: FakeResponse) -> None:
-        self.response = response
+    def __init__(self, responses: FakeResponse | list[FakeResponse]) -> None:
+        self.responses = responses if isinstance(responses, list) else [responses]
+        self.requested_urls: list[str] = []
         self.headers: dict[str, str] = {}
 
     def get(self, url: str, *, timeout: int) -> FakeResponse:
-        return self.response
+        self.requested_urls.append(url)
+        return self.responses.pop(0)
 
 
 def test_fetch_html_rejects_non_ok_status() -> None:
@@ -40,3 +42,36 @@ def test_fetch_search_pages_ignores_showmore_without_href() -> None:
 
     assert len(pages) == 1
     assert pages[0].html == html
+
+
+def test_fetch_search_pages_follows_showmore_link_and_stops() -> None:
+    page_one_html = """
+    <div id="showmore1">
+      <a href="/house-sitting-pet-sitting-jobs/search?searchid=test&amp;page=2">
+        Show more listings
+      </a>
+    </div>
+    """
+    page_two_html = "<div class='search-list-results'></div>"
+    fake_session = FakeSession(
+        [
+            FakeResponse(status_code=200, text=page_one_html),
+            FakeResponse(status_code=200, text=page_two_html),
+        ]
+    )
+    client = KiwiHouseSittersClient()
+    client._session = fake_session
+
+    pages = tuple(
+        client.fetch_search_pages(
+            "https://www.kiwihousesitters.co.nz/house-sitting-pet-sitting-jobs/search",
+            max_pages=3,
+        )
+    )
+
+    assert [page.page_number for page in pages] == [1, 2]
+    assert [page.html for page in pages] == [page_one_html, page_two_html]
+    assert fake_session.requested_urls == [
+        "https://www.kiwihousesitters.co.nz/house-sitting-pet-sitting-jobs/search",
+        "https://www.kiwihousesitters.co.nz/house-sitting-pet-sitting-jobs/search?searchid=test&page=2",
+    ]

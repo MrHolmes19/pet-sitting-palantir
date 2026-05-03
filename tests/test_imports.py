@@ -17,6 +17,61 @@ def test_main_returns_success(monkeypatch, capsys) -> None:
     assert '"listings_seen": 0' in capsys.readouterr().out
 
 
+def test_main_supports_summary_output(monkeypatch, capsys) -> None:
+    class FakeListing:
+        def to_dict(self) -> dict[str, object]:
+            return {
+                "external_id": "614587",
+                "content_hash": "hash",
+                "island": "North Island",
+                "region": "Auckland",
+                "subregion": "Auckland - Central",
+                "city": "Stonefields",
+                "duration_days": 16,
+                "start_date": "2026-06-12",
+                "end_date": "2026-06-28",
+                "house_type": "House",
+                "total_animals": 1,
+                "dogs_count": 1,
+                "cats_count": 0,
+                "fish_count": 0,
+                "birds_count": 0,
+                "rabbits_guinea_pigs_count": 0,
+                "chickens_ducks_geese_count": 0,
+                "farm_animals_count": 0,
+                "horses_count": 0,
+                "reptiles_count": 0,
+                "other_pets_count": 0,
+                "no_pets": False,
+                "starts_soon": True,
+                "reply_rating_score": 10,
+                "listing_tag": "Goofy Dog in Stonefields",
+                "title": "Stonefields Auckland - Auckland - Auckland - Central",
+                "intro": "Looking for someone to look after one dog.",
+                "url": "https://example.test/listing",
+            }
+
+    monkeypatch.setattr(
+        "pet_sitting_palantir.main.scrape_scope",
+        lambda site_filter, max_pages: type(
+            "Result",
+            (),
+            {
+                "search_url": "https://example.test/search",
+                "pages_fetched": 1,
+                "listings": (FakeListing(),),
+            },
+        )(),
+    )
+    monkeypatch.setattr("sys.argv", ["pet-sitting-palantir", "--summary"])
+
+    assert main() == 0
+    output = capsys.readouterr().out
+    assert '"external_id": "614587"' in output
+    assert '"content_hash"' not in output
+    assert '"intro"' not in output
+
+
 def test_settings_load_from_clean_environment(monkeypatch) -> None:
     for name in (
         "SUPABASE_URL",
