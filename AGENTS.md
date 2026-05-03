@@ -12,6 +12,7 @@ Build a low-cost personal scraper and alerting system for KiwiHouseSitters listi
 - Use progressive disclosure: open only the docs needed for the current task.
 - Update docs when a product or architecture decision changes.
 - Prefer simple, low-maintenance implementation choices.
+- Use `uv` for Python dependency management and command execution.
 
 ## Load Context By Task
 
