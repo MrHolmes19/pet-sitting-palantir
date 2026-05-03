@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pet-sitting-palantir.local/contracts/scrape_scopes.schema.json",
+  "title": "scrape_scopes",
+  "type": "object",
+  "description": "Scheduled KiwiHouseSitters search scope. The scheduler reads these rows to decide which searches are due.",
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "integer",
+      "description": "Internal database id."
+    },
+    "name": {
+      "type": "string",
+      "description": "Stable scope identifier used by code and logs."
+    },
+    "enabled": {
+      "type": "boolean",
+      "description": "Whether this scope should be considered by the scheduler."
+    },
+    "interval_minutes": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Desired interval between successful runs. A scope is due when now - last_success_at is greater than or equal to this value."
+    },
+    "missing_threshold_runs": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Number of successful relevant scrapes that can miss a listing before the listing becomes missing_confirmed. This is per scope because 6 Auckland Central runs means about 30 minutes, while 3 All NZ runs means about 3 days."
+    },
+    "site_filter": {
+      "description": "KiwiHouseSitters search filters for this scope.",
+      "$ref": "site_filter.schema.json"
+    },
+    "last_attempt_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time",
+      "description": "Most recent time this scope was attempted, regardless of success."
+    },
+    "last_success_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time",
+      "description": "Most recent successful scrape time. Scheduler due checks use this field, not last_attempt_at, so failed runs do not make data look fresh."
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Creation timestamp."
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Last update timestamp."
+    }
+  },
+  "required": [
+    "id",
+    "name",
+    "enabled",
+    "interval_minutes",
+    "missing_threshold_runs",
+    "site_filter",
+    "last_attempt_at",
+    "last_success_at",
+    "created_at",
+    "updated_at"
+  ],
+  "examples": [
+    {
+      "id": 1,
+      "name": "auckland_central",
+      "enabled": true,
+      "interval_minutes": 5,
+      "missing_threshold_runs": 6,
+      "site_filter": {
+        "state": "north-island",
+        "region": "auckland",
+        "subregion": [
+          "auckland-central"
+        ]
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "created_at": "2026-05-03T09:00:00Z",
+      "updated_at": "2026-05-03T09:00:00Z"
+    }
+  ]
+}

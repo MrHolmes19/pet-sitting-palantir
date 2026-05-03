@@ -102,6 +102,8 @@ Schema SQL lives in `supabase/migrations`.
 
 Initial scope seed data lives in `supabase/seed.sql`.
 
+Database record contracts are documented in `docs/contracts`.
+
 Run SQL integration tests against a real Postgres database:
 
 ```bash

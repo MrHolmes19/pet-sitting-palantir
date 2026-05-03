@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pet-sitting-palantir.local/contracts/scrape_runs.schema.json",
+  "title": "scrape_runs",
+  "type": "object",
+  "description": "Execution log for one scrape of one scope.",
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "integer",
+      "description": "Internal database id."
+    },
+    "scope_id": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "description": "Database id of the scrape scope, if available."
+    },
+    "scope_name": {
+      "type": "string",
+      "description": "Scope name copied onto the run for stable logs."
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Run start timestamp."
+    },
+    "finished_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time",
+      "description": "Run finish timestamp. Null while the run is still active."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "running",
+        "success",
+        "partial_failure",
+        "failed",
+        "suspicious"
+      ],
+      "description": "Run outcome. Missing listings are only marked from success runs."
+    },
+    "search_url": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Initial search URL used for the scrape."
+    },
+    "pages_fetched": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of search result pages fetched."
+    },
+    "listings_seen": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of listings parsed in this run."
+    },
+    "new_listings": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Listings first seen during this run."
+    },
+    "changed_listings": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Existing listings whose meaningful content_hash changed during this run."
+    },
+    "missing_marked": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Existing listings covered by this scope that were not seen in this successful run and had missing_count incremented."
+    },
+    "alerts_sent": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Notifications sent from candidates found in this run."
+    },
+    "error_message": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Failure detail when the run fails or partially fails."
+    }
+  },
+  "required": [
+    "id",
+    "scope_id",
+    "scope_name",
+    "started_at",
+    "finished_at",
+    "status",
+    "search_url",
+    "pages_fetched",
+    "listings_seen",
+    "new_listings",
+    "changed_listings",
+    "missing_marked",
+    "alerts_sent",
+    "error_message"
+  ],
+  "examples": [
+    {
+      "id": 101,
+      "scope_id": 1,
+      "scope_name": "auckland_central",
+      "started_at": "2026-05-03T10:00:00Z",
+      "finished_at": "2026-05-03T10:00:12Z",
+      "status": "success",
+      "search_url": "https://www.kiwihousesitters.co.nz/house-sitting-pet-sitting-jobs/search",
+      "pages_fetched": 1,
+      "listings_seen": 8,
+      "new_listings": 1,
+      "changed_listings": 0,
+      "missing_marked": 2,
+      "alerts_sent": 1,
+      "error_message": null
+    }
+  ]
+}
