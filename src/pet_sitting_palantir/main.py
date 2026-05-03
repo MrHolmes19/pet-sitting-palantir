@@ -10,6 +10,21 @@ from pet_sitting_palantir.kiwihousesitters.constants import (
 )
 from pet_sitting_palantir.kiwihousesitters.scraper import scrape_scope
 
+SUMMARY_LISTING_FIELDS = (
+    "external_id",
+    "island",
+    "region",
+    "subregion",
+    "city",
+    "duration_days",
+    "start_date",
+    "end_date",
+    "total_animals",
+    "dogs_count",
+    "cats_count",
+    "url",
+)
+
 
 def main() -> int:
     """Run the application."""
@@ -22,7 +37,10 @@ def main() -> int:
         "search_url": result.search_url,
         "pages_fetched": result.pages_fetched,
         "listings_seen": len(result.listings),
-        "listings": [listing.to_dict() for listing in result.listings],
+        "listings": [
+            _listing_summary(listing.to_dict()) if args.summary else listing.to_dict()
+            for listing in result.listings
+        ],
     }
 
     print(dumps(output, indent=2 if args.pretty else None, sort_keys=True, default=str))
@@ -48,6 +66,11 @@ def _parse_args() -> Namespace:
         action="store_true",
         help="Pretty-print JSON output.",
     )
+    parser.add_argument(
+        "--summary",
+        action="store_true",
+        help="Print a compact JSON listing summary.",
+    )
     return parser.parse_args()
 
 
@@ -56,3 +79,7 @@ def _positive_int(value: str) -> int:
     if parsed_value < 1:
         raise ArgumentTypeError("--max-pages must be greater than zero")
     return parsed_value
+
+
+def _listing_summary(listing: dict[str, object]) -> dict[str, object]:
+    return {field: listing[field] for field in SUMMARY_LISTING_FIELDS}

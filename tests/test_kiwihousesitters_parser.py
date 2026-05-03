@@ -41,3 +41,15 @@ def test_parse_search_page_handles_leading_separator_location() -> None:
     assert listing.city == "New Plymouth"
     assert listing.region == "Taranaki"
     assert listing.subregion == "New Plymouth"
+
+
+def test_parse_search_page_extracts_multiple_real_page_style_cards() -> None:
+    listings = parse_search_page(_fixture("search_page_multiple_listings.html"))
+
+    assert [listing.external_id for listing in listings] == ["614587", "607595"]
+    assert listings[0].island == "North Island"
+    assert listings[0].total_animals == 1
+    assert listings[1].city == "Masterton"
+    assert listings[1].region == "Wairarapa"
+    assert listings[1].total_animals == 4
+    assert listings[1].starts_soon is False
