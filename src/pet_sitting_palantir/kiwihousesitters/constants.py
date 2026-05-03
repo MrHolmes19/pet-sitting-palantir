@@ -39,6 +39,29 @@ APPROX_DATE_SUFFIX = " (approx)"
 NIGHTS_PATTERN = r"(?:(\d+)\s+week[s]?)?\s*(?:(\d+)\s+night[s]?)?"
 MONTH_YEAR_DATE_FORMAT = "%d %b %Y"
 
+NORTH_ISLAND = "North Island"
+SOUTH_ISLAND = "South Island"
+
+REGION_TO_ISLAND = MappingProxyType(
+    {
+        "Auckland": NORTH_ISLAND,
+        "Bay of Plenty": NORTH_ISLAND,
+        "Gisborne": NORTH_ISLAND,
+        "Hawke's Bay": NORTH_ISLAND,
+        "Manawatū-Whanganui": NORTH_ISLAND,
+        "Northland": NORTH_ISLAND,
+        "Taranaki": NORTH_ISLAND,
+        "Waikato": NORTH_ISLAND,
+        "Wairarapa": NORTH_ISLAND,
+        "Wellington": NORTH_ISLAND,
+        "Canterbury": SOUTH_ISLAND,
+        "Nelson / Marlborough": SOUTH_ISLAND,
+        "Otago": SOUTH_ISLAND,
+        "Southland": SOUTH_ISLAND,
+        "West Coast": SOUTH_ISLAND,
+    }
+)
+
 PET_ALT_TO_FIELD = MappingProxyType(
     {
         "Dogs": "dogs_count",
@@ -51,6 +74,19 @@ PET_ALT_TO_FIELD = MappingProxyType(
         "Horses": "horses_count",
         "Reptiles": "reptiles_count",
     }
+)
+
+ANIMAL_COUNT_FIELDS = (
+    "dogs_count",
+    "cats_count",
+    "fish_count",
+    "birds_count",
+    "rabbits_guinea_pigs_count",
+    "chickens_ducks_geese_count",
+    "farm_animals_count",
+    "horses_count",
+    "reptiles_count",
+    "other_pets_count",
 )
 
 DEFAULT_SITE_FILTERS = MappingProxyType(

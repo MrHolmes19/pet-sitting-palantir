@@ -17,7 +17,7 @@ class ScrapeResult:
 
     search_url: str
     pages_fetched: int
-    listings: list[Listing]
+    listings: tuple[Listing, ...]
 
 
 def scrape_scope(
@@ -36,4 +36,8 @@ def scrape_scope(
         pages_fetched += 1
         listings.extend(parse_search_page(page.html))
 
-    return ScrapeResult(search_url=search_url, pages_fetched=pages_fetched, listings=listings)
+    return ScrapeResult(
+        search_url=search_url,
+        pages_fetched=pages_fetched,
+        listings=tuple(listings),
+    )

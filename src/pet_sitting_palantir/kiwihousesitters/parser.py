@@ -3,13 +3,13 @@
 import re
 from dataclasses import replace
 from datetime import date, datetime
-from typing import Any
 from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup, Tag
 
 from pet_sitting_palantir.domain.models import Listing
 from pet_sitting_palantir.kiwihousesitters.constants import (
+    ANIMAL_COUNT_FIELDS,
     APPROX_DATE_SUFFIX,
     BASE_URL,
     DATE_ICON_TEXT,
@@ -27,6 +27,7 @@ from pet_sitting_palantir.kiwihousesitters.constants import (
     MONTH_YEAR_DATE_FORMAT,
     NIGHTS_PATTERN,
     PET_ALT_TO_FIELD,
+    REGION_TO_ISLAND,
     REPLY_RATING_IMAGE_SELECTOR,
     REPLY_RATING_PATTERN,
     STARTS_SOON_SELECTOR,
@@ -54,32 +55,25 @@ def parse_listing_card(card: Tag) -> Listing:
     listing_tag = _text_or_none(card.select_one(LISTING_TAG_SELECTOR))
     intro = _parse_intro(card)
     footer_values = _parse_footer_values(card)
-    pet_values, pets_raw = _parse_pets(card)
-    reply_rating_score, reply_rating_text = _parse_reply_rating(card)
+    pet_values = _parse_pets(card)
+    reply_rating_score = _parse_reply_rating(card)
     starts_soon = card.select_one(STARTS_SOON_SELECTOR) is not None
     start_date, end_date = _parse_date_range(footer_values.get("dates_text"))
     duration_days = _parse_duration_days(footer_values.get("duration_text"))
-
-    raw_data: dict[str, Any] = {
-        "dates_text": footer_values.get("dates_text"),
-        "duration_text": footer_values.get("duration_text"),
-        "pets_text": pets_raw,
-        "reply_rating_alt": reply_rating_text,
-    }
+    total_animals = _total_animals(pet_values)
 
     listing = Listing(
         external_id=external_id,
-        url=absolute_url,
-        title=title,
-        listing_tag=listing_tag,
-        intro=intro,
-        city=city,
+        content_hash="",
+        island=REGION_TO_ISLAND.get(region) if region else None,
         region=region,
         subregion=subregion,
+        city=city,
+        duration_days=duration_days or _date_delta_days(start_date, end_date),
         start_date=start_date,
         end_date=end_date,
-        duration_days=duration_days or _date_delta_days(start_date, end_date),
-        pets_raw=pets_raw,
+        house_type=footer_values.get("house_type"),
+        total_animals=total_animals,
         dogs_count=pet_values["dogs_count"],
         cats_count=pet_values["cats_count"],
         fish_count=pet_values["fish_count"],
@@ -91,11 +85,12 @@ def parse_listing_card(card: Tag) -> Listing:
         reptiles_count=pet_values["reptiles_count"],
         other_pets_count=pet_values["other_pets_count"],
         no_pets=pet_values["no_pets"],
-        house_type=footer_values.get("house_type"),
         starts_soon=starts_soon,
         reply_rating_score=reply_rating_score,
-        reply_rating_text=reply_rating_text,
-        raw_data=raw_data,
+        listing_tag=listing_tag,
+        title=title,
+        intro=intro,
+        url=absolute_url,
     )
 
     return replace(listing, content_hash=_content_hash_for_listing(listing))
@@ -196,7 +191,7 @@ def _parse_footer_values(card: Tag) -> dict[str, str | None]:
     return values
 
 
-def _parse_pets(card: Tag) -> tuple[dict[str, int | bool], str | None]:
+def _parse_pets(card: Tag) -> dict[str, int | bool]:
     values: dict[str, int | bool] = {
         "dogs_count": 0,
         "cats_count": 0,
@@ -210,7 +205,6 @@ def _parse_pets(card: Tag) -> tuple[dict[str, int | bool], str | None]:
         "other_pets_count": 0,
         "no_pets": False,
     }
-    raw_parts: list[str] = []
 
     for item in card.select(LISTING_PETS_SELECTOR):
         image = item.select_one("img[alt]")
@@ -223,8 +217,6 @@ def _parse_pets(card: Tag) -> tuple[dict[str, int | bool], str | None]:
         count = _parse_int(count_text)
         field_name = PET_ALT_TO_FIELD.get(pet_name)
 
-        raw_parts.append(f"{count} {pet_name}")
-
         if field_name:
             values[field_name] = count
         elif pet_name.lower() == "none":
@@ -232,21 +224,20 @@ def _parse_pets(card: Tag) -> tuple[dict[str, int | bool], str | None]:
         else:
             values["other_pets_count"] = int(values["other_pets_count"]) + count
 
-    return values, ", ".join(raw_parts) if raw_parts else None
+    return values
 
 
-def _parse_reply_rating(card: Tag) -> tuple[int | None, str | None]:
+def _parse_reply_rating(card: Tag) -> int | None:
     image = card.select_one(REPLY_RATING_IMAGE_SELECTOR)
     if image is None:
-        return None, None
+        return None
 
     alt_text = image.get("alt")
     if not alt_text:
-        return None, None
+        return None
 
     match = re.search(REPLY_RATING_PATTERN, alt_text)
-    score = int(match.group(1)) if match else None
-    return score, alt_text
+    return int(match.group(1)) if match else None
 
 
 def _parse_date_range(dates_text: str | None) -> tuple[date | None, date | None]:
@@ -289,16 +280,22 @@ def _date_delta_days(start_date: date | None, end_date: date | None) -> int | No
     return (end_date - start_date).days
 
 
+def _total_animals(pet_values: dict[str, int | bool]) -> int:
+    return sum(int(pet_values[field]) for field in ANIMAL_COUNT_FIELDS)
+
+
 def _content_hash_for_listing(listing: Listing) -> str:
     content = {
         "external_id": listing.external_id,
         "title": listing.title,
+        "island": listing.island,
         "city": listing.city,
         "region": listing.region,
         "subregion": listing.subregion,
         "start_date": listing.start_date,
         "end_date": listing.end_date,
         "duration_days": listing.duration_days,
+        "total_animals": listing.total_animals,
         "dogs_count": listing.dogs_count,
         "cats_count": listing.cats_count,
         "fish_count": listing.fish_count,

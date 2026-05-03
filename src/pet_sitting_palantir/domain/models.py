@@ -10,17 +10,16 @@ class Listing:
     """A normalized KiwiHouseSitters listing from a search result card."""
 
     external_id: str
-    url: str
-    title: str | None = None
-    listing_tag: str | None = None
-    intro: str | None = None
-    city: str | None = None
+    content_hash: str
+    island: str | None = None
     region: str | None = None
     subregion: str | None = None
+    city: str | None = None
+    duration_days: int | None = None
     start_date: date | None = None
     end_date: date | None = None
-    duration_days: int | None = None
-    pets_raw: str | None = None
+    house_type: str | None = None
+    total_animals: int = 0
     dogs_count: int = 0
     cats_count: int = 0
     fish_count: int = 0
@@ -32,12 +31,12 @@ class Listing:
     reptiles_count: int = 0
     other_pets_count: int = 0
     no_pets: bool = False
-    house_type: str | None = None
     starts_soon: bool = False
     reply_rating_score: int | None = None
-    reply_rating_text: str | None = None
-    content_hash: str | None = None
-    raw_data: dict[str, Any] | None = None
+    listing_tag: str | None = None
+    title: str | None = None
+    intro: str | None = None
+    url: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-serializable representation."""

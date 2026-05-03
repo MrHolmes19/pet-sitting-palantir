@@ -41,7 +41,6 @@ class KiwiHouseSittersClient:
     def fetch_html(self, url: str) -> str:
         """Fetch one HTML page and raise for non-success responses."""
         response = self._session.get(url, timeout=self._timeout_seconds)
-        response.raise_for_status()
 
         if response.status_code != HTTP_OK_STATUS:
             raise requests.HTTPError(f"Unexpected status code: {response.status_code}")
@@ -59,5 +58,6 @@ class KiwiHouseSittersClient:
 
             soup = BeautifulSoup(html, "html.parser")
             next_link = soup.select_one(NEXT_PAGE_SELECTOR)
-            next_url = urljoin(BASE_URL, next_link["href"]) if next_link else None
+            next_href = next_link.get("href") if next_link else None
+            next_url = urljoin(BASE_URL, next_href) if next_href else None
             page_number += 1
