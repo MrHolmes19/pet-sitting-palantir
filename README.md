@@ -55,3 +55,31 @@ Possible future analysis:
 ## Documentation
 
 Agent-facing project context starts at [AGENTS.md](AGENTS.md) and continues in focused files under [docs/agent-context](docs/agent-context).
+
+## Development
+
+This project uses `uv` for Python dependency management and command execution.
+
+Install dependencies:
+
+```bash
+uv sync
+```
+
+Run tests:
+
+```bash
+uv run pytest
+```
+
+Run linting:
+
+```bash
+uv run ruff check .
+```
+
+Run the package entry point:
+
+```bash
+uv run python -m pet_sitting_palantir
+```
