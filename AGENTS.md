@@ -14,6 +14,8 @@ Build a low-cost personal scraper and alerting system for KiwiHouseSitters listi
 - Prefer simple, low-maintenance implementation choices.
 - Use `uv` for Python dependency management and command execution.
 - Avoid unexplained hardcoded values. Put reusable values in named constants close to the module that owns them.
+- When changing database migrations or data contracts, always verify `docs/contracts`, `docs/agent-context/data-model.md`, and `supabase/migrations` stay in sync.
+- Format JSON Schema files for human review: use expanded indentation, put examples only at the schema level, and reference nested structures with `$ref` instead of duplicating them inline.
 
 ## Load Context By Task
 
@@ -21,6 +23,7 @@ Build a low-cost personal scraper and alerting system for KiwiHouseSitters listi
 - Scraper behavior and KiwiHouseSitters findings: [scraping-kiwihousesitters.md](docs/agent-context/scraping-kiwihousesitters.md)
 - Scope scheduling: [scheduling-and-scopes.md](docs/agent-context/scheduling-and-scopes.md)
 - Database schema: [data-model.md](docs/agent-context/data-model.md)
+- Data contracts: [docs/contracts](docs/contracts)
 - Listing lifecycle and safety rules: [lifecycle-and-safety.md](docs/agent-context/lifecycle-and-safety.md)
 - Telegram alerts and filters: [alerts.md](docs/agent-context/alerts.md)
 - Implementation phases: [implementation-roadmap.md](docs/agent-context/implementation-roadmap.md)

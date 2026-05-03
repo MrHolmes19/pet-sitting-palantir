@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pet-sitting-palantir.local/contracts/sent_alerts.schema.json",
+  "title": "sent_alerts",
+  "type": "object",
+  "description": "Notification send record. Prevents duplicate notifications for the same listing, filter, channel, and content version.",
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "integer",
+      "description": "Internal database id."
+    },
+    "listing_id": {
+      "type": "integer",
+      "description": "Listing that triggered the notification."
+    },
+    "filter_id": {
+      "type": "integer",
+      "description": "Alert filter that matched the listing."
+    },
+    "sent_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Send attempt timestamp."
+    },
+    "channel": {
+      "type": "string",
+      "description": "Notification channel. Telegram is the first channel."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "sent",
+        "failed"
+      ],
+      "description": "Notification send result."
+    },
+    "message": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Notification message body or attempted body."
+    },
+    "error_message": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Failure detail when status is failed."
+    },
+    "attempt_count": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Number of send attempts for this notification record."
+    },
+    "content_hash_at_alert": {
+      "type": "string",
+      "description": "Listing content_hash at notification time. Included in the unique key so meaningful listing changes can notify again."
+    }
+  },
+  "required": [
+    "id",
+    "listing_id",
+    "filter_id",
+    "sent_at",
+    "channel",
+    "status",
+    "message",
+    "error_message",
+    "attempt_count",
+    "content_hash_at_alert"
+  ],
+  "examples": [
+    {
+      "id": 9001,
+      "listing_id": 5001,
+      "filter_id": 10,
+      "sent_at": "2026-05-03T10:00:15Z",
+      "channel": "telegram",
+      "status": "sent",
+      "message": "New sit matched: Auckland Central good sits",
+      "error_message": null,
+      "attempt_count": 1,
+      "content_hash_at_alert": "7dd5c13ba0cb8c0acb7f494fcc9589d165841a33ab4120641d091610f26fc609"
+    }
+  ]
+}

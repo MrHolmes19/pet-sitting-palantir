@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pet-sitting-palantir.local/contracts/local_filter.schema.json",
+  "title": "local_filter",
+  "type": "object",
+  "description": "Flexible local matching rules evaluated by application code. This is intentionally JSONB so we can experiment with combinations without changing the database schema.",
+  "additionalProperties": true,
+  "properties": {
+    "min_duration_days": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Minimum sit duration."
+    },
+    "max_duration_days": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Maximum sit duration."
+    },
+    "allowed_islands": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Allowed islands."
+    },
+    "allowed_regions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Allowed regions."
+    },
+    "allowed_subregions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Allowed subregions."
+    },
+    "max_total_animals": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Maximum total animals."
+    },
+    "max_dogs": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Maximum dogs."
+    },
+    "cats_only": {
+      "type": "boolean",
+      "description": "Whether only cat listings should match."
+    },
+    "dogs_allowed": {
+      "type": "boolean",
+      "description": "Whether dog listings can match."
+    },
+    "cats_allowed": {
+      "type": "boolean",
+      "description": "Whether cat listings can match."
+    },
+    "farm_animals_allowed": {
+      "type": "boolean",
+      "description": "Whether farm animal listings can match."
+    },
+    "horses_allowed": {
+      "type": "boolean",
+      "description": "Whether horse listings can match."
+    },
+    "min_reply_rating_score": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 10,
+      "description": "Minimum reply rating score."
+    },
+    "allowed_house_types": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "House types allowed by the filter."
+    },
+    "excluded_house_types": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "House types excluded by the filter."
+    },
+    "include_keywords": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Keywords that should appear in listing text."
+    },
+    "exclude_keywords": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Keywords that should not appear in listing text."
+    }
+  },
+  "examples": [
+    {
+      "min_duration_days": 7,
+      "max_duration_days": 45,
+      "allowed_regions": [
+        "Auckland"
+      ],
+      "allowed_subregions": [
+        "Auckland - Central",
+        "North Shore City"
+      ],
+      "max_total_animals": 3,
+      "max_dogs": 2,
+      "cats_allowed": true,
+      "farm_animals_allowed": false,
+      "horses_allowed": false,
+      "min_reply_rating_score": 5,
+      "allowed_house_types": [
+        "House",
+        "Unit",
+        "Flat"
+      ],
+      "excluded_house_types": [
+        "Farm House"
+      ],
+      "exclude_keywords": [
+        "farm",
+        "rural",
+        "own transport required"
+      ]
+    }
+  ]
+}

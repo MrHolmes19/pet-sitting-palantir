@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pet-sitting-palantir.local/contracts/site_filter.schema.json",
+  "title": "site_filter",
+  "type": "object",
+  "description": "KiwiHouseSitters search filters used to build or describe a site search scope.",
+  "additionalProperties": true,
+  "properties": {
+    "state": {
+      "type": "string",
+      "description": "KiwiHouseSitters state filter, such as north-island or south-island."
+    },
+    "region": {
+      "type": "string",
+      "description": "KiwiHouseSitters region filter."
+    },
+    "subregion": {
+      "type": "string",
+      "description": "KiwiHouseSitters subregion filter. The site location UI allows one subregion at a time."
+    }
+  },
+  "examples": [
+    {
+      "state": "north-island",
+      "region": "auckland",
+      "subregion": "auckland-central"
+    }
+  ]
+}

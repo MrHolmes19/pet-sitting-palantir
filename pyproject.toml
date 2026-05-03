@@ -15,6 +15,8 @@ pet-sitting-palantir = "pet_sitting_palantir.main:main"
 
 [dependency-groups]
 dev = [
+  "jsonschema>=4.26.0",
+  "psycopg[binary]>=3.3.4",
   "pytest>=9.0.2",
   "ruff>=0.14.10",
 ]
@@ -34,3 +36,6 @@ select = ["E", "F", "I", "UP", "B"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+markers = [
+  "integration: tests that require external services such as Postgres",
+]

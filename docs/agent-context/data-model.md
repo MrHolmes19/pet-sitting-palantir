@@ -238,7 +238,7 @@ Example:
   "site_filter": {
     "state": "north-island",
     "region": "auckland",
-    "subregion": ["auckland-central"]
+    "subregion": "auckland-central"
   },
   "local_filter": {
     "min_duration_days": 7,

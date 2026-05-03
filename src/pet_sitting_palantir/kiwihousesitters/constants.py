@@ -97,7 +97,7 @@ DEFAULT_SITE_FILTERS = MappingProxyType(
         "auckland_central": {
             "state": "north-island",
             "region": "auckland",
-            "subregion": ["auckland-central"],
+            "subregion": "auckland-central",
         },
     }
 )

@@ -1,0 +1,332 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pet-sitting-palantir.local/contracts/listings.schema.json",
+  "title": "listings",
+  "type": "object",
+  "description": "Normalized KiwiHouseSitters listing persisted for alerts, lifecycle tracking, and analytics.",
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "integer",
+      "description": "Internal database id."
+    },
+    "external_id": {
+      "type": "string",
+      "description": "KiwiHouseSitters listing id extracted from the listing URL."
+    },
+    "content_hash": {
+      "type": "string",
+      "description": "Hash computed by this system from meaningful listing fields. It is used to detect changed listings and notification versions."
+    },
+    "island": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "North Island",
+        "South Island",
+        null
+      ],
+      "description": "Island inferred by this system from region. Null if region is unknown."
+    },
+    "region": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Region parsed from the listing card."
+    },
+    "subregion": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Subregion parsed from the listing card."
+    },
+    "city": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "City or locality parsed from the listing title."
+    },
+    "duration_days": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "description": "Sit duration in days."
+    },
+    "start_date": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date",
+      "description": "Sit start date."
+    },
+    "end_date": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date",
+      "description": "Sit end date."
+    },
+    "house_type": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Home type shown by the site."
+    },
+    "total_animals": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Total animal count aggregated by this system from all individual animal count fields."
+    },
+    "dogs_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Dog count."
+    },
+    "cats_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Cat count."
+    },
+    "fish_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Fish count."
+    },
+    "birds_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Bird count."
+    },
+    "rabbits_guinea_pigs_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Rabbit/guinea pig count."
+    },
+    "chickens_ducks_geese_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Chicken, duck, or goose count."
+    },
+    "farm_animals_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Farm animal count."
+    },
+    "horses_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Horse count."
+    },
+    "reptiles_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Reptile count."
+    },
+    "other_pets_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Other or unmapped pet count."
+    },
+    "no_pets": {
+      "type": "boolean",
+      "description": "Whether the site indicates no pets."
+    },
+    "starts_soon": {
+      "type": "boolean",
+      "description": "Site-provided Starts soon signal. It is stored as observed and is not calculated by this system."
+    },
+    "reply_rating_score": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 10,
+      "description": "Numeric reply rating parsed from site alt text."
+    },
+    "listing_tag": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Short listing label shown by the site."
+    },
+    "title": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Full listing title/location text."
+    },
+    "intro": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Short intro text from the search card."
+    },
+    "url": {
+      "type": "string",
+      "description": "Absolute listing URL."
+    },
+    "first_seen_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "First time this system saw the listing."
+    },
+    "last_seen_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Most recent successful scrape where this listing appeared."
+    },
+    "first_seen_run_id": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "description": "Run id that first saw this listing."
+    },
+    "last_seen_run_id": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "description": "Run id that most recently saw this listing."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "missing_once",
+        "missing_confirmed",
+        "expired_by_date"
+      ],
+      "description": "Listing lifecycle status."
+    },
+    "missing_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of successful relevant scrapes that did not see this listing. Reset to 0 when the listing appears again."
+    },
+    "missing_since": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time",
+      "description": "When the listing first became missing_once."
+    },
+    "closed_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time",
+      "description": "When the listing became closed or expired."
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Creation timestamp."
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Last update timestamp."
+    }
+  },
+  "required": [
+    "id",
+    "external_id",
+    "content_hash",
+    "island",
+    "region",
+    "subregion",
+    "city",
+    "duration_days",
+    "start_date",
+    "end_date",
+    "house_type",
+    "total_animals",
+    "dogs_count",
+    "cats_count",
+    "fish_count",
+    "birds_count",
+    "rabbits_guinea_pigs_count",
+    "chickens_ducks_geese_count",
+    "farm_animals_count",
+    "horses_count",
+    "reptiles_count",
+    "other_pets_count",
+    "no_pets",
+    "starts_soon",
+    "reply_rating_score",
+    "listing_tag",
+    "title",
+    "intro",
+    "url",
+    "first_seen_at",
+    "last_seen_at",
+    "first_seen_run_id",
+    "last_seen_run_id",
+    "status",
+    "missing_count",
+    "missing_since",
+    "closed_at",
+    "created_at",
+    "updated_at"
+  ],
+  "examples": [
+    {
+      "id": 5001,
+      "external_id": "614587",
+      "content_hash": "7dd5c13ba0cb8c0acb7f494fcc9589d165841a33ab4120641d091610f26fc609",
+      "island": "North Island",
+      "region": "Auckland",
+      "subregion": "Auckland - Central",
+      "city": "Stonefields",
+      "duration_days": 6,
+      "start_date": "2026-05-05",
+      "end_date": "2026-05-11",
+      "house_type": "Duplex",
+      "total_animals": 1,
+      "dogs_count": 1,
+      "cats_count": 0,
+      "fish_count": 0,
+      "birds_count": 0,
+      "rabbits_guinea_pigs_count": 0,
+      "chickens_ducks_geese_count": 0,
+      "farm_animals_count": 0,
+      "horses_count": 0,
+      "reptiles_count": 0,
+      "other_pets_count": 0,
+      "no_pets": false,
+      "starts_soon": true,
+      "reply_rating_score": 10,
+      "listing_tag": "Goofy Dog in Stonefields",
+      "title": "Stonefields Auckland - Auckland - Auckland - Central",
+      "intro": "Looking for someone to look after one dog.",
+      "url": "https://www.kiwihousesitters.co.nz/house-sitting-pet-sitting-job/614587/stonefields-auckland-auckland",
+      "first_seen_at": "2026-05-03T10:00:00Z",
+      "last_seen_at": "2026-05-03T10:00:00Z",
+      "first_seen_run_id": 101,
+      "last_seen_run_id": 101,
+      "status": "active",
+      "missing_count": 0,
+      "missing_since": null,
+      "closed_at": null,
+      "created_at": "2026-05-03T10:00:00Z",
+      "updated_at": "2026-05-03T10:00:00Z"
+    }
+  ]
+}
