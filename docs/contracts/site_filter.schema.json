@@ -15,27 +15,15 @@
       "description": "KiwiHouseSitters region filter."
     },
     "subregion": {
-      "oneOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      ],
-      "description": "KiwiHouseSitters subregion filter. Can be one value or multiple values."
+      "type": "string",
+      "description": "KiwiHouseSitters subregion filter. The site location UI allows one subregion at a time."
     }
   },
   "examples": [
     {
       "state": "north-island",
       "region": "auckland",
-      "subregion": [
-        "auckland-central"
-      ]
+      "subregion": "auckland-central"
     }
   ]
 }

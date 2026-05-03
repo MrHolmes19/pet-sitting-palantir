@@ -64,7 +64,7 @@ These values are starting points, not product law.
 {
   "state": "north-island",
   "region": "auckland",
-  "subregion": ["auckland-central"]
+  "subregion": "auckland-central"
 }
 ```
 

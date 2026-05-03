@@ -1,4 +1,4 @@
-insert into public.scrape_scopes (
+insert into scrape_scopes (
   name,
   interval_minutes,
   missing_threshold_runs,
@@ -9,7 +9,7 @@ values
     'auckland_central',
     5,
     6,
-    '{"state":"north-island","region":"auckland","subregion":["auckland-central"]}'::jsonb
+    '{"state":"north-island","region":"auckland","subregion":"auckland-central"}'::jsonb
   ),
   (
     'auckland_region',

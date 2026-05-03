@@ -81,9 +81,7 @@
       "site_filter": {
         "state": "north-island",
         "region": "auckland",
-        "subregion": [
-          "auckland-central"
-        ]
+        "subregion": "auckland-central"
       },
       "last_attempt_at": null,
       "last_success_at": null,

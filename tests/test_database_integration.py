@@ -11,12 +11,7 @@ try:
 except ImportError:  # pragma: no cover
     psycopg = None
 
-MIGRATION_FILE = (
-    Path(__file__).parents[1]
-    / "supabase"
-    / "migrations"
-    / "20260503000100_initial_schema.sql"
-)
+MIGRATIONS_DIR = Path(__file__).parents[1] / "supabase" / "migrations"
 SEED_FILE = Path(__file__).parents[1] / "supabase" / "seed.sql"
 
 
@@ -34,7 +29,7 @@ def test_initial_schema_and_seed_apply_to_real_postgres() -> None:
         pytest.skip("Set TEST_DATABASE_URL or DATABASE_URL to run this integration test")
 
     schema_name = f"test_schema_{uuid4().hex}"
-    migration_sql = MIGRATION_FILE.read_text()
+    migration_sql = "\n".join(path.read_text() for path in sorted(MIGRATIONS_DIR.glob("*.sql")))
     seed_sql = SEED_FILE.read_text()
 
     with psycopg.connect(database_url, autocommit=True, row_factory=dict_row) as connection:
@@ -47,8 +42,8 @@ def test_initial_schema_and_seed_apply_to_real_postgres() -> None:
             )
 
             try:
-                cursor.execute(migration_sql.replace("public.", ""))
-                cursor.execute(seed_sql.replace("public.", ""))
+                cursor.execute(migration_sql)
+                cursor.execute(seed_sql)
 
                 cursor.execute(
                     """

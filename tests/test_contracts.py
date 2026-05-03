@@ -6,12 +6,7 @@ from jsonschema import Draft202012Validator, FormatChecker
 from referencing import Registry, Resource
 
 CONTRACTS_DIR = Path(__file__).parents[1] / "docs" / "contracts"
-MIGRATION_FILE = (
-    Path(__file__).parents[1]
-    / "supabase"
-    / "migrations"
-    / "20260503000100_initial_schema.sql"
-)
+MIGRATIONS_DIR = Path(__file__).parents[1] / "supabase" / "migrations"
 
 TABLE_CONTRACTS = {
     "scrape_scopes": CONTRACTS_DIR / "scrape_scopes.schema.json",
@@ -29,7 +24,7 @@ def _load_schema(path: Path) -> dict:
 
 
 def _migration_sql() -> str:
-    return MIGRATION_FILE.read_text()
+    return "\n".join(path.read_text() for path in sorted(MIGRATIONS_DIR.glob("*.sql")))
 
 
 def _registry() -> Registry:
@@ -42,7 +37,7 @@ def _registry() -> Registry:
 
 def _table_columns(table_name: str) -> set[str]:
     match = re.search(
-        rf"create table public\.{table_name} \((.*?)\n\);",
+        rf"create table (?:public\.)?{table_name} \((.*?)\n\);",
         _migration_sql(),
         flags=re.DOTALL,
     )
@@ -53,6 +48,13 @@ def _table_columns(table_name: str) -> set[str]:
         column_match = re.match(r"\s{2}([a-z_]+)\s+", line)
         if column_match and column_match.group(1) != "constraint":
             columns.add(column_match.group(1))
+
+    alter_column_matches = re.findall(
+        rf"alter table (?:public\.)?{table_name}\s+add column\s+([a-z_]+)\s+",
+        _migration_sql(),
+        flags=re.IGNORECASE,
+    )
+    columns.update(alter_column_matches)
 
     return columns
 

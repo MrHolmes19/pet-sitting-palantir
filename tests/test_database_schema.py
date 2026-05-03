@@ -6,7 +6,7 @@ INITIAL_SCHEMA = MIGRATIONS_DIR / "20260503000100_initial_schema.sql"
 
 
 def _migration_sql() -> str:
-    return INITIAL_SCHEMA.read_text()
+    return "\n".join(path.read_text() for path in sorted(MIGRATIONS_DIR.glob("*.sql")))
 
 
 def _seed_sql() -> str:
@@ -27,7 +27,7 @@ def test_initial_schema_creates_expected_tables() -> None:
         "alert_filters",
         "sent_alerts",
     ):
-        assert f"create table public.{table_name}" in sql
+        assert f"create table {table_name}" in sql
 
 
 def test_listings_schema_matches_persistence_decision() -> None:
@@ -73,7 +73,10 @@ def test_listings_schema_keeps_preferred_column_order() -> None:
         "url text not null",
     )
 
-    positions = [sql.index(column) for column in ordered_columns]
+    positions = []
+    for column in ordered_columns:
+        assert column in sql, f"Expected listings column not found: {column}"
+        positions.append(sql.index(column))
 
     assert positions == sorted(positions)
 
@@ -107,7 +110,7 @@ def test_seed_contains_initial_scrape_scopes() -> None:
         "'auckland_region'",
         "'north_island'",
         "'all_nz'",
-        '{"state":"north-island","region":"auckland","subregion":["auckland-central"]}',
+        '{"state":"north-island","region":"auckland","subregion":"auckland-central"}',
         '{"state":"north-island","region":"auckland"}',
         '{"state":"north-island"}',
         "'{}'::jsonb",

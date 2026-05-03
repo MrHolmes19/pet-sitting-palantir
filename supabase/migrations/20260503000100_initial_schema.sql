@@ -1,4 +1,4 @@
-create or replace function public.set_updated_at()
+create or replace function set_updated_at()
 returns trigger
 language plpgsql
 as $$
@@ -8,7 +8,7 @@ begin
 end;
 $$;
 
-create table public.scrape_scopes (
+create table scrape_scopes (
   id bigserial primary key,
   name text not null unique,
   enabled boolean not null default true,
@@ -28,14 +28,14 @@ create table public.scrape_scopes (
 );
 
 create trigger scrape_scopes_set_updated_at
-before update on public.scrape_scopes
+before update on scrape_scopes
 for each row
-execute function public.set_updated_at();
+execute function set_updated_at();
 
-create table public.scrape_runs (
+create table scrape_runs (
   id bigserial primary key,
 
-  scope_id bigint references public.scrape_scopes(id),
+  scope_id bigint references scrape_scopes(id),
   scope_name text not null,
 
   started_at timestamptz not null default now(),
@@ -64,7 +64,7 @@ create table public.scrape_runs (
   constraint scrape_runs_alerts_sent_non_negative check (alerts_sent >= 0)
 );
 
-create table public.listings (
+create table listings (
   id bigserial primary key,
 
   external_id text not null unique,
@@ -104,8 +104,8 @@ create table public.listings (
 
   first_seen_at timestamptz not null default now(),
   last_seen_at timestamptz not null default now(),
-  first_seen_run_id bigint references public.scrape_runs(id),
-  last_seen_run_id bigint references public.scrape_runs(id),
+  first_seen_run_id bigint references scrape_runs(id),
+  last_seen_run_id bigint references scrape_runs(id),
 
   status text not null default 'active',
   missing_count int not null default 0,
@@ -149,11 +149,11 @@ create table public.listings (
 );
 
 create trigger listings_set_updated_at
-before update on public.listings
+before update on listings
 for each row
-execute function public.set_updated_at();
+execute function set_updated_at();
 
-create table public.alert_filters (
+create table alert_filters (
   id bigserial primary key,
   name text not null,
   enabled boolean not null default true,
@@ -166,15 +166,15 @@ create table public.alert_filters (
 );
 
 create trigger alert_filters_set_updated_at
-before update on public.alert_filters
+before update on alert_filters
 for each row
-execute function public.set_updated_at();
+execute function set_updated_at();
 
-create table public.sent_alerts (
+create table sent_alerts (
   id bigserial primary key,
 
-  listing_id bigint not null references public.listings(id),
-  filter_id bigint not null references public.alert_filters(id),
+  listing_id bigint not null references listings(id),
+  filter_id bigint not null references alert_filters(id),
 
   sent_at timestamptz not null default now(),
   channel text not null default 'telegram',
@@ -197,28 +197,28 @@ create table public.sent_alerts (
 );
 
 create index scrape_scopes_enabled_due_idx
-  on public.scrape_scopes (enabled, last_success_at);
+  on scrape_scopes (enabled, last_success_at);
 
 create index scrape_runs_scope_started_idx
-  on public.scrape_runs (scope_name, started_at desc);
+  on scrape_runs (scope_name, started_at desc);
 
 create index scrape_runs_status_started_idx
-  on public.scrape_runs (status, started_at desc);
+  on scrape_runs (status, started_at desc);
 
 create index listings_status_last_seen_idx
-  on public.listings (status, last_seen_at);
+  on listings (status, last_seen_at);
 
 create index listings_location_idx
-  on public.listings (island, region, subregion, city);
+  on listings (island, region, subregion, city);
 
 create index listings_start_date_idx
-  on public.listings (start_date);
+  on listings (start_date);
 
 create index listings_end_date_idx
-  on public.listings (end_date);
+  on listings (end_date);
 
 create index sent_alerts_filter_sent_idx
-  on public.sent_alerts (filter_id, sent_at desc);
+  on sent_alerts (filter_id, sent_at desc);
 
 create index sent_alerts_status_sent_idx
-  on public.sent_alerts (status, sent_at desc);
+  on sent_alerts (status, sent_at desc);
