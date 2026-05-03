@@ -95,3 +95,15 @@ Print a compact summary instead of every parsed field:
 ```bash
 uv run python -m pet_sitting_palantir --scope all_nz --max-pages 1 --summary --pretty
 ```
+
+## Database
+
+Schema SQL lives in `supabase/migrations`.
+
+Initial scope seed data lives in `supabase/seed.sql`.
+
+Run SQL integration tests against a real Postgres database:
+
+```bash
+TEST_DATABASE_URL="$DATABASE_URL" uv run pytest tests/test_database_integration.py
+```
