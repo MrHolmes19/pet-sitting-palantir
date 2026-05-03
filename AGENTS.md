@@ -13,6 +13,7 @@ Build a low-cost personal scraper and alerting system for KiwiHouseSitters listi
 - Update docs when a product or architecture decision changes.
 - Prefer simple, low-maintenance implementation choices.
 - Use `uv` for Python dependency management and command execution.
+- Avoid unexplained hardcoded values. Put reusable values in named constants close to the module that owns them.
 
 ## Load Context By Task
 

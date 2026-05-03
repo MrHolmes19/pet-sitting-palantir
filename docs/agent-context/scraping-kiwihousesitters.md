@@ -147,21 +147,18 @@ Do not enter each listing detail page in v1. Extract from search cards:
 - `start_date`
 - `end_date`
 - `duration_days`
-- `pets_raw`
 - pet counts by category
 - `no_pets`
 - `house_type`
 - `starts_soon`
 - `reply_rating_score`
-- `reply_rating_text`
 - `content_hash`
-- optional `raw_data`
+
+The parser may inspect raw text such as date text, pet text, or reply-rating alt text internally, but those debug/raw fields are not part of the v1 persisted listing shape.
 
 ## Parser Notes
 
 - `reply_rating` may appear in image alt text such as `Reply Rating 10`. Store the clean numeric value as `reply_rating_score` when possible.
-- Keep the original string as `reply_rating_text` if useful for debugging.
 - `starts_soon` is a site-provided listing signal. It is not calculated by this system.
 - Store `starts_soon`, but exclude it from `content_hash`.
-- Date parsing should preserve original date text in `raw_data` if present.
-- Pet parsing should preserve original pet text in `pets_raw` and `raw_data`.
+- Date and pet parsing can use original text internally for tests/debugging, but do not persist that raw text in v1.

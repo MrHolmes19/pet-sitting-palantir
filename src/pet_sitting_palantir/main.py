@@ -1,10 +1,58 @@
 """Command-line entry point for the scraper application."""
 
+from argparse import ArgumentParser, ArgumentTypeError, Namespace
+from json import dumps
+
+from pet_sitting_palantir.kiwihousesitters.constants import (
+    DEFAULT_MAX_PAGES,
+    DEFAULT_SCOPE_NAME,
+    DEFAULT_SITE_FILTERS,
+)
+from pet_sitting_palantir.kiwihousesitters.scraper import scrape_scope
+
 
 def main() -> int:
-    """Run the application.
+    """Run the application."""
+    args = _parse_args()
+    site_filter = DEFAULT_SITE_FILTERS[args.scope]
+    result = scrape_scope(site_filter=site_filter, max_pages=args.max_pages)
 
-    Real scraper orchestration will be added in the scraper PR.
-    """
-    print("pet-sitting-palantir skeleton ready")
+    output = {
+        "scope": args.scope,
+        "search_url": result.search_url,
+        "pages_fetched": result.pages_fetched,
+        "listings_seen": len(result.listings),
+        "listings": [listing.to_dict() for listing in result.listings],
+    }
+
+    print(dumps(output, indent=2 if args.pretty else None, sort_keys=True, default=str))
     return 0
+
+
+def _parse_args() -> Namespace:
+    parser = ArgumentParser(description="Scrape KiwiHouseSitters search results.")
+    parser.add_argument(
+        "--scope",
+        choices=sorted(DEFAULT_SITE_FILTERS.keys()),
+        default=DEFAULT_SCOPE_NAME,
+        help="Configured search scope to scrape.",
+    )
+    parser.add_argument(
+        "--max-pages",
+        type=_positive_int,
+        default=DEFAULT_MAX_PAGES,
+        help="Maximum number of paginated search result pages to fetch.",
+    )
+    parser.add_argument(
+        "--pretty",
+        action="store_true",
+        help="Pretty-print JSON output.",
+    )
+    return parser.parse_args()
+
+
+def _positive_int(value: str) -> int:
+    parsed_value = int(value)
+    if parsed_value < 1:
+        raise ArgumentTypeError("--max-pages must be greater than zero")
+    return parsed_value

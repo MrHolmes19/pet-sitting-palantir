@@ -83,3 +83,9 @@ Run the package entry point:
 ```bash
 uv run python -m pet_sitting_palantir
 ```
+
+Fetch the first KiwiHouseSitters search page and print normalized JSON:
+
+```bash
+uv run python -m pet_sitting_palantir --scope all_nz --max-pages 1 --pretty
+```
