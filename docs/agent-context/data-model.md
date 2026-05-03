@@ -81,26 +81,43 @@ create index scrape_runs_status_started_idx
 
 One row per KiwiHouseSitters job.
 
+Persist normalized fields that are useful for alerting, lifecycle, and analytics. Do not persist parser/debug raw text fields in v1:
+
+- Do not persist `raw_data`.
+- Do not persist `pets_raw`.
+- Do not persist `reply_rating_text`.
+- Persist `reply_rating_score`.
+
+Preferred field order for persisted listing data:
+
+1. Identifiers: `id`, `external_id`, `content_hash`.
+2. Location: `island`, `region`, `subregion`, `city`.
+3. Timing: `duration_days`, `start_date`, `end_date`.
+4. Home: `house_type`.
+5. Animals: `total_animals`, then individual animal counts.
+6. Site signals: `starts_soon`, `reply_rating_score`.
+7. Listing text and links: `listing_tag`, `title`, `intro`, `url`.
+8. Lifecycle and audit fields.
+
 ```sql
 create table listings (
   id bigserial primary key,
 
   external_id text not null unique,
-  url text not null,
+  content_hash text,
 
-  title text,
-  listing_tag text,
-  intro text,
-
-  city text,
+  island text,
   region text,
   subregion text,
+  city text,
 
+  duration_days int,
   start_date date,
   end_date date,
-  duration_days int,
 
-  pets_raw text,
+  house_type text,
+
+  total_animals int not null default 0,
   dogs_count int not null default 0,
   cats_count int not null default 0,
   fish_count int not null default 0,
@@ -113,12 +130,13 @@ create table listings (
   other_pets_count int not null default 0,
   no_pets boolean not null default false,
 
-  house_type text,
   starts_soon boolean not null default false,
   reply_rating_score int,
-  reply_rating_text text,
 
-  content_hash text,
+  listing_tag text,
+  title text,
+  intro text,
+  url text not null,
 
   first_seen_at timestamptz not null default now(),
   last_seen_at timestamptz not null default now(),
@@ -129,8 +147,6 @@ create table listings (
   missing_count int not null default 0,
   missing_since timestamptz,
   closed_at timestamptz,
-
-  raw_data jsonb,
 
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -143,14 +159,58 @@ Suggested indexes:
 create index listings_status_last_seen_idx
   on listings (status, last_seen_at);
 
-create index listings_region_subregion_idx
-  on listings (region, subregion);
+create index listings_location_idx
+  on listings (island, region, subregion, city);
 
 create index listings_start_date_idx
   on listings (start_date);
 ```
 
 Note: `external_id text not null unique` creates a unique index in PostgreSQL, so a separate plain index on `external_id` is not needed.
+
+## Location Aggregation
+
+`island` is aggregated by this system from the listing `region`. Use one named mapping constant in code, not scattered conditionals.
+
+North Island regions:
+
+- `Auckland`
+- `Bay of Plenty`
+- `Gisborne`
+- `Hawke's Bay`
+- `Manawatū-Whanganui`
+- `Northland`
+- `Taranaki`
+- `Waikato`
+- `Wairarapa`
+- `Wellington`
+
+South Island regions:
+
+- `Canterbury`
+- `Nelson / Marlborough`
+- `Otago`
+- `Southland`
+- `West Coast`
+
+If a region is not in the mapping, keep `island` null and preserve the original `region` value.
+
+## Animal Aggregation
+
+`total_animals` is aggregated by this system as:
+
+```text
+dogs_count
++ cats_count
++ fish_count
++ birds_count
++ rabbits_guinea_pigs_count
++ chickens_ducks_geese_count
++ farm_animals_count
++ horses_count
++ reptiles_count
++ other_pets_count
+```
 
 ## `alert_filters`
 
@@ -230,35 +290,20 @@ create index sent_alerts_status_sent_idx
   on sent_alerts (status, sent_at desc);
 ```
 
-## `raw_data`
-
-`raw_data` is optional but useful for parser debugging. Keep it lightweight.
-
-Example:
-
-```json
-{
-  "dates_text": "20 May 2026 - 4 Jun 2026",
-  "duration_text": "15 nights",
-  "pets_text": "2 Dogs, 1 Cat",
-  "reply_rating_alt": "Reply Rating 10"
-}
-```
-
-Do not store full HTML in `raw_data` for every listing in v1.
-
 ## Content Hash
 
 The content hash should represent meaningful listing content:
 
 - `external_id`
 - `title`
+- `island`
 - `city`
 - `region`
 - `subregion`
 - `start_date`
 - `end_date`
 - `duration_days`
+- `total_animals`
 - pet counts
 - `house_type`
 - `reply_rating_score`

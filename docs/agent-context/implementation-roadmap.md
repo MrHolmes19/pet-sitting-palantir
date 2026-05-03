@@ -95,5 +95,4 @@ Add after the first working pipeline:
 - Retry handling for failed Telegram alerts.
 - Parser tests with HTML fixtures.
 - Better structured logs.
-- Optional `raw_data` tuning.
 - Optional detail-page scraping only for high-value matches.

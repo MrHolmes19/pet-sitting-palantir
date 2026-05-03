@@ -31,3 +31,9 @@ Decision: prefer cheap, boring infrastructure and small implementation phases. A
 Fast alerts matter, but the scraper should avoid unnecessary request volume against KiwiHouseSitters.
 
 Decision: use staggered scopes instead of scraping every geographic level every 5 minutes.
+
+## Listing Persistence Shape
+
+The database should store normalized, useful listing fields rather than parser/debug text.
+
+Decision: do not persist `raw_data`, `pets_raw`, or `reply_rating_text` in v1. Persist `reply_rating_score`, add `island` as a region-based aggregation, and add `total_animals` as an animal-count aggregation.
