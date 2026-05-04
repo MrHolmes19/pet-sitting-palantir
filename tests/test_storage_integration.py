@@ -9,14 +9,18 @@ from psycopg import sql
 from psycopg.rows import dict_row
 
 from pet_sitting_palantir.domain.models import Listing
+from pet_sitting_palantir.kiwihousesitters.scraper import ScrapeResult
 from pet_sitting_palantir.storage import (
     ScrapeRunCounts,
     close_scrape_run,
     create_scrape_run,
+    listing_record_from_scraped_listing,
+    read_enabled_scrape_scope,
     read_enabled_scrape_scopes,
     upsert_listing,
     upsert_listings,
 )
+from pet_sitting_palantir.workflows.scrape_and_store import scrape_and_store_scope_with_connection
 
 try:
     import psycopg
@@ -73,6 +77,19 @@ def test_reads_enabled_scrape_scopes(postgres_connection) -> None:
         "north_island",
     ]
     assert scopes[1].site_filter == {
+        "state": "north-island",
+        "region": "auckland",
+        "subregion": "auckland-central",
+    }
+
+
+@pytest.mark.integration
+def test_reads_one_enabled_scrape_scope_by_name(postgres_connection) -> None:
+    scope = read_enabled_scrape_scope(postgres_connection, name="auckland_central")
+
+    assert scope is not None
+    assert scope.name == "auckland_central"
+    assert scope.site_filter == {
         "state": "north-island",
         "region": "auckland",
         "subregion": "auckland-central",
@@ -144,12 +161,14 @@ def test_upserts_listing_by_external_id(postgres_connection) -> None:
         scope_name=scope.name,
     )
 
-    listing = _listing()
+    listing = listing_record_from_scraped_listing(_listing())
     first_result = upsert_listing(postgres_connection, listing=listing, run_id=run_id)
     same_result = upsert_listing(postgres_connection, listing=listing, run_id=run_id)
     changed_result = upsert_listing(
         postgres_connection,
-        listing=_listing(content_hash="hash-v2", title="Updated title"),
+        listing=listing_record_from_scraped_listing(
+            _listing(content_hash="hash-v2", title="Updated title")
+        ),
         run_id=run_id,
     )
 
@@ -196,13 +215,19 @@ def test_upsert_listings_returns_run_counts(postgres_connection) -> None:
         scope_name=scope.name,
     )
 
-    upsert_listing(postgres_connection, listing=_listing(external_id="614587"), run_id=run_id)
+    upsert_listing(
+        postgres_connection,
+        listing=listing_record_from_scraped_listing(_listing(external_id="614587")),
+        run_id=run_id,
+    )
 
     summary = upsert_listings(
         postgres_connection,
         listings=(
-            _listing(external_id="614587", content_hash="changed"),
-            _listing(external_id="614588", content_hash="new"),
+            listing_record_from_scraped_listing(
+                _listing(external_id="614587", content_hash="changed")
+            ),
+            listing_record_from_scraped_listing(_listing(external_id="614588", content_hash="new")),
         ),
         run_id=run_id,
     )
@@ -224,16 +249,118 @@ def test_upsert_listing_rejects_incomplete_listing(postgres_connection) -> None:
     with pytest.raises(ValueError, match="content_hash"):
         upsert_listing(
             postgres_connection,
-            listing=_listing(content_hash=""),
+            listing=listing_record_from_scraped_listing(_listing(content_hash="")),
             run_id=run_id,
         )
 
     with pytest.raises(ValueError, match="url"):
         upsert_listing(
             postgres_connection,
-            listing=_listing(url=None),
+            listing=listing_record_from_scraped_listing(_listing(url=None)),
             run_id=run_id,
         )
+
+
+@pytest.mark.integration
+def test_scrape_and_store_scope_persists_scraper_result(postgres_connection) -> None:
+    def fake_scraper(site_filter, *, max_pages):
+        assert site_filter == {
+            "state": "north-island",
+            "region": "auckland",
+            "subregion": "auckland-central",
+        }
+        assert max_pages == 1
+        return ScrapeResult(
+            search_url="https://example.test/search",
+            pages_fetched=1,
+            listings=(_listing(),),
+        )
+
+    result = scrape_and_store_scope_with_connection(
+        postgres_connection,
+        scope_name="auckland_central",
+        max_pages=1,
+        scraper=fake_scraper,
+    )
+
+    assert result.status == "success"
+    assert result.scope_name == "auckland_central"
+    assert result.pages_fetched == 1
+    assert result.listings_seen == 1
+    assert result.new_listings == 1
+    assert result.changed_listings == 0
+
+    with postgres_connection.cursor() as cursor:
+        cursor.execute(
+            """
+            select
+              scrape_runs.status,
+              scrape_runs.pages_fetched,
+              scrape_runs.listings_seen,
+              scrape_runs.new_listings,
+              scrape_runs.changed_listings,
+              scrape_scopes.last_attempt_at,
+              scrape_scopes.last_success_at
+            from scrape_runs
+            join scrape_scopes on scrape_scopes.id = scrape_runs.scope_id
+            where scrape_runs.id = %s
+            """,
+            (result.run_id,),
+        )
+        run = cursor.fetchone()
+
+        cursor.execute(
+            """
+            select external_id, title, region, subregion, starts_soon, status
+            from listings
+            where external_id = %s
+            """,
+            ("614587",),
+        )
+        listing = cursor.fetchone()
+
+    assert run["status"] == "success"
+    assert run["pages_fetched"] == 1
+    assert run["listings_seen"] == 1
+    assert run["new_listings"] == 1
+    assert run["changed_listings"] == 0
+    assert run["last_attempt_at"] is not None
+    assert run["last_success_at"] is not None
+    assert listing == {
+        "external_id": "614587",
+        "title": "Stonefields Auckland - Auckland - Auckland - Central",
+        "region": "Auckland",
+        "subregion": "Auckland - Central",
+        "starts_soon": True,
+        "status": "active",
+    }
+
+
+@pytest.mark.integration
+def test_scrape_and_store_scope_closes_failed_run(postgres_connection) -> None:
+    def failing_scraper(site_filter, *, max_pages):
+        raise RuntimeError("scrape failed")
+
+    with pytest.raises(RuntimeError, match="scrape failed"):
+        scrape_and_store_scope_with_connection(
+            postgres_connection,
+            scope_name="auckland_central",
+            scraper=failing_scraper,
+        )
+
+    with postgres_connection.cursor() as cursor:
+        cursor.execute(
+            """
+            select status, error_message
+            from scrape_runs
+            order by id desc
+            limit 1
+            """
+        )
+        run = cursor.fetchone()
+
+    assert run["status"] == "failed"
+    assert run["error_message"] == "scrape failed"
 
 
 def _listing(

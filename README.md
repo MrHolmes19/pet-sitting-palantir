@@ -96,6 +96,13 @@ Print a compact summary instead of every parsed field:
 uv run python -m pet_sitting_palantir --scope all_nz --max-pages 1 --summary --pretty
 ```
 
+Scrape one database-backed scope and persist normalized listings:
+
+```bash
+DATABASE_URL="postgresql://palantir:palantir@localhost:54321/pet_sitting_palantir" \
+  uv run python -m pet_sitting_palantir --scope auckland_central --max-pages 1 --persist --pretty
+```
+
 ## Database
 
 Schema SQL lives in `supabase/migrations`.
