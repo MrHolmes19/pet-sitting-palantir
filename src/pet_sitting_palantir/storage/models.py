@@ -2,7 +2,7 @@
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Literal
 
 ScrapeRunStatus = Literal["running", "success", "partial_failure", "failed", "suspicious"]
@@ -32,6 +32,40 @@ class ScrapeRunCounts:
     changed_listings: int = 0
     missing_marked: int = 0
     alerts_sent: int = 0
+
+
+@dataclass(frozen=True)
+class ListingRecord:
+    """Persisted listing fields derived from a scraped listing."""
+
+    external_id: str
+    content_hash: str
+    island: str | None = None
+    region: str | None = None
+    subregion: str | None = None
+    city: str | None = None
+    duration_days: int | None = None
+    start_date: date | None = None
+    end_date: date | None = None
+    house_type: str | None = None
+    total_animals: int = 0
+    dogs_count: int = 0
+    cats_count: int = 0
+    fish_count: int = 0
+    birds_count: int = 0
+    rabbits_guinea_pigs_count: int = 0
+    chickens_ducks_geese_count: int = 0
+    farm_animals_count: int = 0
+    horses_count: int = 0
+    reptiles_count: int = 0
+    other_pets_count: int = 0
+    no_pets: bool = False
+    starts_soon: bool = False
+    reply_rating_score: int | None = None
+    listing_tag: str | None = None
+    title: str | None = None
+    intro: str | None = None
+    url: str = ""
 
 
 @dataclass(frozen=True)

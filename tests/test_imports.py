@@ -72,6 +72,36 @@ def test_main_supports_summary_output(monkeypatch, capsys) -> None:
     assert '"intro"' not in output
 
 
+def test_main_supports_persist_output(monkeypatch, capsys) -> None:
+    class FakeStoredResult:
+        def to_dict(self) -> dict[str, object]:
+            return {
+                "scope_name": "auckland_central",
+                "run_id": 123,
+                "search_url": "https://example.test/search",
+                "pages_fetched": 1,
+                "listings_seen": 2,
+                "new_listings": 1,
+                "changed_listings": 1,
+                "status": "success",
+            }
+
+    monkeypatch.setattr(
+        "pet_sitting_palantir.main.scrape_and_store_scope",
+        lambda scope_name, max_pages: FakeStoredResult(),
+    )
+    monkeypatch.setattr(
+        "sys.argv",
+        ["pet-sitting-palantir", "--scope", "auckland_central", "--max-pages", "1", "--persist"],
+    )
+
+    assert main() == 0
+    output = capsys.readouterr().out
+    assert '"scope_name": "auckland_central"' in output
+    assert '"run_id": 123' in output
+    assert '"status": "success"' in output
+
+
 def test_settings_load_from_clean_environment(monkeypatch) -> None:
     for name in (
         "SUPABASE_URL",
