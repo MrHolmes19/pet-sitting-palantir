@@ -5,8 +5,8 @@ from typing import Any
 
 from psycopg import Connection
 
-from pet_sitting_palantir.domain.models import Listing
 from pet_sitting_palantir.storage.models import (
+    ListingRecord,
     ListingUpsertResult,
     ListingUpsertSummary,
 )
@@ -46,7 +46,7 @@ LISTING_COLUMNS = (
 def upsert_listing(
     connection: Connection,
     *,
-    listing: Listing,
+    listing: ListingRecord,
     run_id: int,
 ) -> ListingUpsertResult:
     """Insert or update a listing by external_id."""
@@ -115,7 +115,7 @@ def upsert_listing(
 def upsert_listings(
     connection: Connection,
     *,
-    listings: Iterable[Listing],
+    listings: Iterable[ListingRecord],
     run_id: int,
 ) -> ListingUpsertSummary:
     """Upsert a batch of listings and return counters for scrape_runs."""
@@ -136,11 +136,11 @@ def upsert_listings(
     )
 
 
-def _listing_values(listing: Listing) -> tuple[Any, ...]:
+def _listing_values(listing: ListingRecord) -> tuple[Any, ...]:
     return tuple(getattr(listing, column) for column in LISTING_COLUMNS)
 
 
-def _validate_listing_for_persistence(listing: Listing) -> None:
+def _validate_listing_for_persistence(listing: ListingRecord) -> None:
     if not listing.content_hash:
         raise ValueError(f"Listing {listing.external_id} cannot be persisted without content_hash")
     if not listing.url:

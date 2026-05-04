@@ -9,6 +9,7 @@ from pet_sitting_palantir.kiwihousesitters.constants import (
     DEFAULT_SITE_FILTERS,
 )
 from pet_sitting_palantir.kiwihousesitters.scraper import scrape_scope
+from pet_sitting_palantir.workflows.scrape_and_store import scrape_and_store_scope
 
 SUMMARY_LISTING_FIELDS = (
     "external_id",
@@ -29,6 +30,11 @@ SUMMARY_LISTING_FIELDS = (
 def main() -> int:
     """Run the application."""
     args = _parse_args()
+    if args.persist:
+        result = scrape_and_store_scope(scope_name=args.scope, max_pages=args.max_pages)
+        print(dumps(result.to_dict(), indent=2 if args.pretty else None, sort_keys=True))
+        return 0
+
     site_filter = DEFAULT_SITE_FILTERS[args.scope]
     result = scrape_scope(site_filter=site_filter, max_pages=args.max_pages)
 
@@ -70,6 +76,11 @@ def _parse_args() -> Namespace:
         "--summary",
         action="store_true",
         help="Print a compact JSON listing summary.",
+    )
+    parser.add_argument(
+        "--persist",
+        action="store_true",
+        help="Store scraped listings in Postgres instead of printing listing JSON.",
     )
     return parser.parse_args()
 
