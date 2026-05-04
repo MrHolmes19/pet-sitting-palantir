@@ -104,6 +104,54 @@ Initial scope seed data lives in `supabase/seed.sql`.
 
 Database record contracts are documented in `docs/contracts`.
 
+Start a local Postgres database with Docker:
+
+```bash
+docker compose up -d postgres
+```
+
+Run database integration tests against that local database:
+
+```bash
+scripts/test-local-postgres.sh
+```
+
+The script starts Docker Postgres, waits until it is ready, and runs:
+
+```bash
+TEST_DATABASE_URL="postgresql://palantir:palantir@localhost:54321/pet_sitting_palantir" \
+  uv --cache-dir .uv-cache run pytest \
+    tests/test_database_integration.py \
+    tests/test_storage_integration.py
+```
+
+Stop the local database:
+
+```bash
+docker compose down
+```
+
+Initialize the persistent local database for manual inspection:
+
+```bash
+scripts/init-local-postgres.sh
+```
+
+Open `psql`:
+
+```bash
+docker compose exec postgres psql -U palantir -d pet_sitting_palantir
+```
+
+Useful inspection queries:
+
+```sql
+\dt
+select * from scrape_scopes order by name;
+select * from scrape_runs order by started_at desc;
+select external_id, title, region, subregion, status from listings;
+```
+
 Run SQL integration tests against a real Postgres database:
 
 ```bash
