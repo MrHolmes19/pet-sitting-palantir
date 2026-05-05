@@ -53,11 +53,12 @@ Goal: persist listings and track lifecycle.
 
 Deliverables:
 
-- `process_scope(scope)`
+- `scrape_and_store_scope(scope_name)`
 - New listing detection.
 - Meaningful changed listing detection via `content_hash`.
 - Silent volatile updates such as site-provided `starts_soon`.
 - Missing logic using `scope.missing_threshold_runs`.
+- Suspicious zero-result run handling that avoids missing inference.
 - Expiration handling for `expired_by_date`.
 
 ## Phase 5 - Telegram Alerts

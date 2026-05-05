@@ -15,6 +15,8 @@ from pet_sitting_palantir.storage import (
     connect_database,
     create_scrape_run,
     listing_record_from_scraped_listing,
+    mark_expired_by_date,
+    mark_missing_listings_for_scope,
     read_enabled_scrape_scope,
     upsert_listings,
 )
@@ -42,6 +44,7 @@ class StoredScrapeResult:
     listings_seen: int
     new_listings: int
     changed_listings: int
+    missing_marked: int
     status: str
 
     def to_dict(self) -> dict[str, Any]:
@@ -95,12 +98,39 @@ def scrape_and_store_scope_with_connection(
         records = tuple(
             listing_record_from_scraped_listing(listing) for listing in scrape_result.listings
         )
+        if not records:
+            counts = ScrapeRunCounts(
+                pages_fetched=scrape_result.pages_fetched,
+                listings_seen=0,
+            )
+            close_scrape_run(connection, run_id=run_id, status="suspicious", counts=counts)
+            _commit_if_transactional(connection)
+
+            return StoredScrapeResult(
+                scope_name=scope.name,
+                run_id=run_id,
+                search_url=scrape_result.search_url,
+                pages_fetched=scrape_result.pages_fetched,
+                listings_seen=0,
+                new_listings=0,
+                changed_listings=0,
+                missing_marked=0,
+                status="suspicious",
+            )
+
         summary = upsert_listings(connection, listings=records, run_id=run_id)
+        missing_marked = mark_missing_listings_for_scope(
+            connection,
+            scope=scope,
+            seen_external_ids={record.external_id for record in records},
+        )
+        mark_expired_by_date(connection)
         counts = ScrapeRunCounts(
             pages_fetched=scrape_result.pages_fetched,
             listings_seen=summary.listings_seen,
             new_listings=summary.new_listings,
             changed_listings=summary.changed_listings,
+            missing_marked=missing_marked,
         )
         close_scrape_run(connection, run_id=run_id, status="success", counts=counts)
         _commit_if_transactional(connection)
@@ -113,6 +143,7 @@ def scrape_and_store_scope_with_connection(
             listings_seen=summary.listings_seen,
             new_listings=summary.new_listings,
             changed_listings=summary.changed_listings,
+            missing_marked=missing_marked,
             status="success",
         )
     except Exception as error:

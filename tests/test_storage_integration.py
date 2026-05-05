@@ -15,6 +15,7 @@ from pet_sitting_palantir.storage import (
     close_scrape_run,
     create_scrape_run,
     listing_record_from_scraped_listing,
+    mark_expired_by_date,
     read_enabled_scrape_scope,
     read_enabled_scrape_scopes,
     upsert_listing,
@@ -290,6 +291,7 @@ def test_scrape_and_store_scope_persists_scraper_result(postgres_connection) -> 
     assert result.listings_seen == 1
     assert result.new_listings == 1
     assert result.changed_listings == 0
+    assert result.missing_marked == 0
 
     with postgres_connection.cursor() as cursor:
         cursor.execute(
@@ -300,6 +302,7 @@ def test_scrape_and_store_scope_persists_scraper_result(postgres_connection) -> 
               scrape_runs.listings_seen,
               scrape_runs.new_listings,
               scrape_runs.changed_listings,
+              scrape_runs.missing_marked,
               scrape_scopes.last_attempt_at,
               scrape_scopes.last_success_at
             from scrape_runs
@@ -325,6 +328,7 @@ def test_scrape_and_store_scope_persists_scraper_result(postgres_connection) -> 
     assert run["listings_seen"] == 1
     assert run["new_listings"] == 1
     assert run["changed_listings"] == 0
+    assert run["missing_marked"] == 0
     assert run["last_attempt_at"] is not None
     assert run["last_success_at"] is not None
     assert listing == {
@@ -335,6 +339,225 @@ def test_scrape_and_store_scope_persists_scraper_result(postgres_connection) -> 
         "starts_soon": True,
         "status": "active",
     }
+
+
+@pytest.mark.integration
+def test_successful_scrape_marks_only_missing_listings_covered_by_scope(
+    postgres_connection,
+) -> None:
+    seed_run_id = create_scrape_run(
+        postgres_connection,
+        scope_id=None,
+        scope_name="manual_seed",
+    )
+    upsert_listing(
+        postgres_connection,
+        listing=listing_record_from_scraped_listing(
+            _listing(external_id="covered-missing", title="Covered missing")
+        ),
+        run_id=seed_run_id,
+    )
+    upsert_listing(
+        postgres_connection,
+        listing=listing_record_from_scraped_listing(
+            _listing(
+                external_id="outside-scope",
+                title="Outside scope",
+                subregion="North Shore City",
+            )
+        ),
+        run_id=seed_run_id,
+    )
+
+    def fake_scraper(site_filter, *, max_pages):
+        return ScrapeResult(
+            search_url="https://example.test/search",
+            pages_fetched=1,
+            listings=(_listing(external_id="seen-now", title="Seen now"),),
+        )
+
+    result = scrape_and_store_scope_with_connection(
+        postgres_connection,
+        scope_name="auckland_central",
+        scraper=fake_scraper,
+    )
+
+    assert result.status == "success"
+    assert result.missing_marked == 1
+
+    with postgres_connection.cursor() as cursor:
+        cursor.execute(
+            """
+            select external_id, status, missing_count, missing_since, closed_at
+            from listings
+            where external_id in ('covered-missing', 'outside-scope', 'seen-now')
+            order by external_id
+            """
+        )
+        rows = {row["external_id"]: row for row in cursor.fetchall()}
+
+    assert rows["covered-missing"]["status"] == "missing_once"
+    assert rows["covered-missing"]["missing_count"] == 1
+    assert rows["covered-missing"]["missing_since"] is not None
+    assert rows["covered-missing"]["closed_at"] is None
+    assert rows["outside-scope"]["status"] == "active"
+    assert rows["outside-scope"]["missing_count"] == 0
+    assert rows["seen-now"]["status"] == "active"
+    assert rows["seen-now"]["missing_count"] == 0
+
+
+@pytest.mark.integration
+def test_missing_listing_reaching_threshold_becomes_missing_confirmed(
+    postgres_connection,
+) -> None:
+    seed_run_id = create_scrape_run(
+        postgres_connection,
+        scope_id=None,
+        scope_name="manual_seed",
+    )
+    upsert_listing(
+        postgres_connection,
+        listing=listing_record_from_scraped_listing(
+            _listing(external_id="threshold-missing", title="Threshold missing")
+        ),
+        run_id=seed_run_id,
+    )
+    with postgres_connection.cursor() as cursor:
+        cursor.execute(
+            """
+            update listings
+            set status = 'missing_once',
+                missing_count = 5,
+                missing_since = now()
+            where external_id = 'threshold-missing'
+            """
+        )
+
+    def fake_scraper(site_filter, *, max_pages):
+        return ScrapeResult(
+            search_url="https://example.test/search",
+            pages_fetched=1,
+            listings=(_listing(external_id="different-seen", title="Different seen"),),
+        )
+
+    result = scrape_and_store_scope_with_connection(
+        postgres_connection,
+        scope_name="auckland_central",
+        scraper=fake_scraper,
+    )
+
+    assert result.missing_marked == 1
+
+    with postgres_connection.cursor() as cursor:
+        cursor.execute(
+            """
+            select status, missing_count, closed_at
+            from listings
+            where external_id = 'threshold-missing'
+            """
+        )
+        row = cursor.fetchone()
+
+    assert row["status"] == "missing_confirmed"
+    assert row["missing_count"] == 6
+    assert row["closed_at"] is not None
+
+
+@pytest.mark.integration
+def test_zero_listing_scrape_is_suspicious_and_does_not_mark_missing(
+    postgres_connection,
+) -> None:
+    seed_run_id = create_scrape_run(
+        postgres_connection,
+        scope_id=None,
+        scope_name="manual_seed",
+    )
+    upsert_listing(
+        postgres_connection,
+        listing=listing_record_from_scraped_listing(
+            _listing(external_id="not-missing-on-suspicious")
+        ),
+        run_id=seed_run_id,
+    )
+
+    def empty_scraper(site_filter, *, max_pages):
+        return ScrapeResult(
+            search_url="https://example.test/search",
+            pages_fetched=1,
+            listings=(),
+        )
+
+    result = scrape_and_store_scope_with_connection(
+        postgres_connection,
+        scope_name="auckland_central",
+        scraper=empty_scraper,
+    )
+
+    assert result.status == "suspicious"
+    assert result.listings_seen == 0
+    assert result.missing_marked == 0
+
+    with postgres_connection.cursor() as cursor:
+        cursor.execute(
+            """
+            select scrape_runs.status, scrape_runs.missing_marked, scrape_scopes.last_success_at
+            from scrape_runs
+            join scrape_scopes on scrape_scopes.id = scrape_runs.scope_id
+            where scrape_runs.id = %s
+            """,
+            (result.run_id,),
+        )
+        run = cursor.fetchone()
+
+        cursor.execute(
+            """
+            select status, missing_count
+            from listings
+            where external_id = 'not-missing-on-suspicious'
+            """
+        )
+        listing = cursor.fetchone()
+
+    assert run["status"] == "suspicious"
+    assert run["missing_marked"] == 0
+    assert run["last_success_at"] is None
+    assert listing["status"] == "active"
+    assert listing["missing_count"] == 0
+
+
+@pytest.mark.integration
+def test_mark_expired_by_date_closes_past_end_date_listing(postgres_connection) -> None:
+    seed_run_id = create_scrape_run(
+        postgres_connection,
+        scope_id=None,
+        scope_name="manual_seed",
+    )
+    upsert_listing(
+        postgres_connection,
+        listing=listing_record_from_scraped_listing(
+            _listing(
+                external_id="expired-listing",
+                start_date=date(2025, 1, 1),
+                end_date=date(2025, 1, 2),
+            )
+        ),
+        run_id=seed_run_id,
+    )
+
+    assert mark_expired_by_date(postgres_connection) == 1
+
+    with postgres_connection.cursor() as cursor:
+        cursor.execute(
+            """
+            select status, closed_at
+            from listings
+            where external_id = 'expired-listing'
+            """
+        )
+        row = cursor.fetchone()
+
+    assert row["status"] == "expired_by_date"
+    assert row["closed_at"] is not None
 
 
 @pytest.mark.integration
@@ -369,6 +592,9 @@ def _listing(
     external_id: str = "614587",
     content_hash: str = "hash-v1",
     title: str = "Stonefields Auckland - Auckland - Auckland - Central",
+    subregion: str = "Auckland - Central",
+    start_date: date = date(2026, 5, 5),
+    end_date: date = date(2026, 5, 11),
     url: str | None = "https://example.test/listing/614587",
 ) -> Listing:
     return Listing(
@@ -376,11 +602,11 @@ def _listing(
         content_hash=content_hash,
         island="North Island",
         region="Auckland",
-        subregion="Auckland - Central",
+        subregion=subregion,
         city="Stonefields",
         duration_days=6,
-        start_date=date(2026, 5, 5),
-        end_date=date(2026, 5, 11),
+        start_date=start_date,
+        end_date=end_date,
         house_type="Duplex",
         total_animals=1,
         dogs_count=1,
