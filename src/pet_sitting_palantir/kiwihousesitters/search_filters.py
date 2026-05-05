@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from pet_sitting_palantir.kiwihousesitters.constants import SEARCH_URL
+from pet_sitting_palantir.kiwihousesitters.location_map import REGION_FILTERS, STATE_LABELS
 
 SearchMethod = Literal["GET", "POST"]
 
@@ -26,15 +27,6 @@ DEFAULT_SEARCH_FORM = {
     "locationname": "",
     "dates": "",
 }
-
-REGION_SLUG_TO_SITE_ID = {
-    "auckland": "33",
-}
-
-SUBREGION_SLUG_TO_SITE_ID = {
-    ("auckland", "auckland-central"): "178",
-}
-
 
 @dataclass(frozen=True)
 class SearchRequest:
@@ -66,9 +58,13 @@ def search_form_data_from_site_filter(site_filter: Mapping[str, Any]) -> dict[st
     subregion = _optional_string(site_filter, "subregion")
 
     if state:
+        _validate_state(state)
         form_data["state"] = state
     if region:
-        form_data["region"] = _site_region_id(region)
+        region_filter = _region_filter(region)
+        if state and region_filter.state != state:
+            raise ValueError(f"KiwiHouseSitters region {region} does not belong to {state}")
+        form_data["region"] = region_filter.site_id
     if subregion:
         if not region:
             raise ValueError("subregion filters require a region")
@@ -86,16 +82,22 @@ def _optional_string(site_filter: Mapping[str, Any], key: str) -> str | None:
     return value
 
 
-def _site_region_id(region: str) -> str:
+def _validate_state(state: str) -> None:
+    if state not in STATE_LABELS:
+        raise ValueError(f"Unsupported KiwiHouseSitters state filter: {state}")
+
+
+def _region_filter(region: str):
     try:
-        return REGION_SLUG_TO_SITE_ID[region]
+        return REGION_FILTERS[region]
     except KeyError as error:
         raise ValueError(f"Unsupported KiwiHouseSitters region filter: {region}") from error
 
 
 def _site_subregion_id(region: str, subregion: str) -> str:
+    region_filter = _region_filter(region)
     try:
-        return SUBREGION_SLUG_TO_SITE_ID[(region, subregion)]
+        return region_filter.subregions[subregion].site_id
     except KeyError as error:
         raise ValueError(
             f"Unsupported KiwiHouseSitters subregion filter: {region}/{subregion}"

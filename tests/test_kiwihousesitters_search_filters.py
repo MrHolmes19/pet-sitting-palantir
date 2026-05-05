@@ -34,6 +34,34 @@ def test_auckland_central_scope_uses_post_form_site_ids() -> None:
     assert request.form_data["subregion"] == "178"
 
 
+def test_north_shore_city_scope_uses_discovered_subregion_id() -> None:
+    form_data = search_form_data_from_site_filter(
+        {
+            "state": "north-island",
+            "region": "auckland",
+            "subregion": "north-shore-city",
+        }
+    )
+
+    assert form_data["state"] == "north-island"
+    assert form_data["region"] == "33"
+    assert form_data["subregion"] == "181"
+
+
+def test_south_island_region_and_subregion_use_discovered_ids() -> None:
+    form_data = search_form_data_from_site_filter(
+        {
+            "state": "south-island",
+            "region": "canterbury",
+            "subregion": "christchurch",
+        }
+    )
+
+    assert form_data["state"] == "south-island"
+    assert form_data["region"] == "41"
+    assert form_data["subregion"] == "544"
+
+
 def test_north_island_scope_uses_state_without_region_ids() -> None:
     form_data = search_form_data_from_site_filter({"state": "north-island"})
 
@@ -45,6 +73,16 @@ def test_north_island_scope_uses_state_without_region_ids() -> None:
 def test_unsupported_region_fails_before_scraping() -> None:
     with pytest.raises(ValueError, match="Unsupported KiwiHouseSitters region"):
         search_form_data_from_site_filter({"region": "not-mapped"})
+
+
+def test_region_must_belong_to_state() -> None:
+    with pytest.raises(ValueError, match="does not belong"):
+        search_form_data_from_site_filter({"state": "south-island", "region": "auckland"})
+
+
+def test_unsupported_state_fails_before_scraping() -> None:
+    with pytest.raises(ValueError, match="Unsupported KiwiHouseSitters state"):
+        search_form_data_from_site_filter({"state": "not-mapped"})
 
 
 def test_subregion_requires_region() -> None:
