@@ -83,6 +83,7 @@ def test_main_supports_persist_output(monkeypatch, capsys) -> None:
                 "listings_seen": 2,
                 "new_listings": 1,
                 "changed_listings": 1,
+                "missing_marked": 0,
                 "status": "success",
             }
 
