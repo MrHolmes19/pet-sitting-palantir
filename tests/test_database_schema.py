@@ -1,4 +1,10 @@
+import json
+import re
 from pathlib import Path
+
+from pet_sitting_palantir.kiwihousesitters.search_filters import (
+    search_form_data_from_site_filter,
+)
 
 MIGRATIONS_DIR = Path(__file__).parents[1] / "supabase" / "migrations"
 SEED_FILE = Path(__file__).parents[1] / "supabase" / "seed.sql"
@@ -108,9 +114,11 @@ def test_seed_contains_initial_scrape_scopes() -> None:
     expected_scope_fragments = (
         "'auckland_central'",
         "'auckland_region'",
+        "'north_shore_city'",
         "'north_island'",
         "'all_nz'",
         '{"state":"north-island","region":"auckland","subregion":"auckland-central"}',
+        '{"state":"north-island","region":"auckland","subregion":"north-shore-city"}',
         '{"state":"north-island","region":"auckland"}',
         '{"state":"north-island"}',
         "'{}'::jsonb",
@@ -120,3 +128,14 @@ def test_seed_contains_initial_scrape_scopes() -> None:
         assert fragment in sql
 
     assert "on conflict (name) do update" in sql
+
+
+def test_seeded_scrape_scope_filters_convert_to_site_form_data() -> None:
+    site_filters = [
+        json.loads(match)
+        for match in re.findall(r"""'(\{[^']*\})'::jsonb""", _seed_sql())
+    ]
+
+    assert site_filters
+    for site_filter in site_filters:
+        search_form_data_from_site_filter(site_filter)

@@ -16,7 +16,8 @@ This avoids hardcoded wall-clock schedules and tolerates:
 | Scope | Interval | Purpose |
 | --- | ---: | --- |
 | `auckland_central` | 5 minutes | Fastest alerts for highest-value area. |
-| `auckland_region` | 15 minutes | Broader Auckland awareness, including North Shore City as second alert priority. |
+| `north_shore_city` | 10 minutes | Dedicated alerts for second-priority Auckland area. |
+| `auckland_region` | 60 minutes | Broader Auckland awareness and history collection. |
 | `north_island` | 720 minutes | Wider market context. |
 | `all_nz` | 1440 minutes | Full historical baseline. |
 
@@ -50,7 +51,8 @@ Suggested initial values:
 | Scope | Interval | Missing Threshold | Approx Time Before Confirmed Missing |
 | --- | ---: | ---: | ---: |
 | `auckland_central` | 5 min | 6 | 30 min |
-| `auckland_region` | 15 min | 4 | 60 min |
+| `north_shore_city` | 10 min | 3 | 30 min |
+| `auckland_region` | 60 min | 3 | 3 hours |
 | `north_island` | 720 min | 3 | 36 hours |
 | `all_nz` | 1440 min | 3 | 3 days |
 
@@ -77,6 +79,16 @@ These values are starting points, not product law.
 }
 ```
 
+`north_shore_city`:
+
+```json
+{
+  "state": "north-island",
+  "region": "auckland",
+  "subregion": "north-shore-city"
+}
+```
+
 `north_island`:
 
 ```json
@@ -98,6 +110,7 @@ A scope may only mark listings missing if those listings belong to that scope.
 Examples:
 
 - `auckland_central` may mark only Auckland Central listings missing.
+- `north_shore_city` may mark only North Shore City listings missing.
 - `auckland_region` may mark Auckland Region listings missing.
 - `all_nz` may mark any New Zealand listing missing.
 

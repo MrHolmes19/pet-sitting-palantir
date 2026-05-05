@@ -26,7 +26,8 @@ Initial scope cadence:
 | Scope | Frequency |
 | --- | ---: |
 | Auckland Central | 5 minutes |
-| Auckland Region | 15 minutes |
+| North Shore City | 10 minutes |
+| Auckland Region | 60 minutes |
 | North Island | 12 hours |
 | All New Zealand | 24 hours |
 

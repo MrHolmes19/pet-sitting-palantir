@@ -78,9 +78,13 @@ def test_initial_schema_and_seed_apply_to_real_postgres() -> None:
                     "auckland_central",
                     "auckland_region",
                     "north_island",
+                    "north_shore_city",
                 }
                 assert scopes["auckland_central"]["interval_minutes"] == 5
                 assert scopes["auckland_central"]["missing_threshold_runs"] == 6
+                assert scopes["north_shore_city"]["interval_minutes"] == 10
+                assert scopes["north_shore_city"]["missing_threshold_runs"] == 3
+                assert scopes["auckland_region"]["interval_minutes"] == 60
                 assert scopes["all_nz"]["site_filter"] == {}
             finally:
                 cursor.execute(
