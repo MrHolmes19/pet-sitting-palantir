@@ -35,6 +35,13 @@ from pet_sitting_palantir.kiwihousesitters.constants import (
 )
 from pet_sitting_palantir.utils.hashing import stable_content_hash
 
+AUCKLAND_SUBREGION_ALIASES = {
+    "Central": "Auckland - Central",
+    "North": "Auckland - North",
+    "South": "Auckland - South",
+    "West": "Auckland - West",
+}
+
 
 def parse_search_page(html: str) -> list[Listing]:
     """Parse all listing cards from a KiwiHouseSitters search page."""
@@ -151,7 +158,7 @@ def _parse_title_location(
         region = location_parts[1]
         subregion = DATE_RANGE_SEPARATOR.join(location_parts[2:])
 
-    return title_text or None, city, region, subregion
+    return title_text or None, city, region, _normalize_subregion(region, subregion)
 
 
 def _parse_intro(card: Tag) -> str | None:
@@ -164,6 +171,12 @@ def _parse_intro(card: Tag) -> str | None:
         link.decompose()
 
     return _text_or_none(intro_copy)
+
+
+def _normalize_subregion(region: str | None, subregion: str | None) -> str | None:
+    if region == "Auckland" and subregion in AUCKLAND_SUBREGION_ALIASES:
+        return AUCKLAND_SUBREGION_ALIASES[subregion]
+    return subregion
 
 
 def _parse_footer_values(card: Tag) -> dict[str, str | None]:

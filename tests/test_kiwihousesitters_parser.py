@@ -43,6 +43,27 @@ def test_parse_search_page_handles_leading_separator_location() -> None:
     assert listing.subregion == "New Plymouth"
 
 
+def test_parse_search_page_normalizes_short_auckland_subregion() -> None:
+    listings = parse_search_page(
+        """
+        <div class="card primary with-header search-listing">
+          <div class="card-body">
+            <h3>
+              <a href="/house-sitting-pet-sitting-job/614540/point-chevalier-auckland">
+                Point Chevalier
+                <span> - Auckland - Central</span>
+              </a>
+            </h3>
+          </div>
+        </div>
+        """
+    )
+
+    assert listings[0].city == "Point Chevalier"
+    assert listings[0].region == "Auckland"
+    assert listings[0].subregion == "Auckland - Central"
+
+
 def test_parse_search_page_extracts_multiple_real_page_style_cards() -> None:
     listings = parse_search_page(_fixture("search_page_multiple_listings.html"))
 
