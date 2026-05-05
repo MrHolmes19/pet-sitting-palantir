@@ -103,6 +103,18 @@ Scrape one database-backed scope and persist normalized listings:
 scripts/persist-local.sh auckland_central 1
 ```
 
+Run every database-backed scope that is due:
+
+```bash
+scripts/run-due-local.sh 1
+```
+
+If `DATABASE_URL` is set in the environment or in a local `.env` file, you can also run:
+
+```bash
+uv run python -m pet_sitting_palantir --run-due --max-pages 1 --pretty
+```
+
 If `DATABASE_URL` is set in the environment or in a local `.env` file, you can also run:
 
 ```bash

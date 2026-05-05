@@ -9,6 +9,7 @@ from pet_sitting_palantir.kiwihousesitters.constants import (
     DEFAULT_SITE_FILTERS,
 )
 from pet_sitting_palantir.kiwihousesitters.scraper import scrape_scope
+from pet_sitting_palantir.workflows.run_due_scopes import run_due_scrape_scopes
 from pet_sitting_palantir.workflows.scrape_and_store import scrape_and_store_scope
 
 SUMMARY_LISTING_FIELDS = (
@@ -30,6 +31,11 @@ SUMMARY_LISTING_FIELDS = (
 def main() -> int:
     """Run the application."""
     args = _parse_args()
+    if args.run_due:
+        result = run_due_scrape_scopes(max_pages=args.max_pages)
+        print(dumps(result.to_dict(), indent=2 if args.pretty else None, sort_keys=True))
+        return 1 if result.scopes_failed else 0
+
     if args.persist:
         result = scrape_and_store_scope(scope_name=args.scope, max_pages=args.max_pages)
         print(dumps(result.to_dict(), indent=2 if args.pretty else None, sort_keys=True))
@@ -81,6 +87,11 @@ def _parse_args() -> Namespace:
         "--persist",
         action="store_true",
         help="Store scraped listings in Postgres instead of printing listing JSON.",
+    )
+    parser.add_argument(
+        "--run-due",
+        action="store_true",
+        help="Store every enabled database scrape scope whose interval is due.",
     )
     return parser.parse_args()
 
