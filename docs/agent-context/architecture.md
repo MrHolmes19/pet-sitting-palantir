@@ -16,7 +16,7 @@ Supabase provides hosted PostgreSQL with a free tier suitable for early developm
 
 Telegram is the primary notification channel. Email is not a v1 channel.
 
-The KiwiHouseSitters search page appears to return server-side rendered HTML in the initial response. v1 should therefore use `requests` and BeautifulSoup, not Playwright.
+The KiwiHouseSitters search page returns server-side rendered HTML. Filtered searches use a form POST to the base search URL after an initial GET, so v1 should use `requests.Session` and BeautifulSoup, not Playwright.
 
 ## Runtime Flow
 
@@ -24,7 +24,7 @@ The KiwiHouseSitters search page appears to return server-side rendered HTML in 
 2. Python script reads enabled `scrape_scopes`.
 3. For each scope, the script checks whether `now - last_success_at >= interval_minutes`.
 4. For each due scope, create a `scrape_runs` row with `status = running`.
-5. Build the initial KiwiHouseSitters search URL from `site_filter`.
+5. Build the initial KiwiHouseSitters search request from `site_filter`.
 6. Fetch and parse all paginated search result pages.
 7. Normalize listing data.
 8. Upsert listings.
@@ -36,13 +36,15 @@ The KiwiHouseSitters search page appears to return server-side rendered HTML in 
 
 ## Component Boundaries
 
-Suggested modules once implementation starts:
+Current module boundaries:
 
-- `config`: environment variables and constants.
-- `kiwihousesitters_client`: HTTP fetching, retry basics, URL building.
-- `kiwihousesitters_parser`: BeautifulSoup parsing and normalization.
-- `models` or `dto`: typed listing and scope objects.
-- `repository`: Supabase/PostgreSQL reads and writes.
+- `config`: environment variables and repo-root `.env` loading.
+- `kiwihousesitters.client`: HTTP fetching and pagination.
+- `kiwihousesitters.search_filters`: stored site-filter slug to KiwiHouseSitters POST form conversion.
+- `kiwihousesitters.parser`: BeautifulSoup parsing and normalization.
+- `domain.models`: typed scraped listing objects.
+- `storage`: PostgreSQL reads, writes, and storage DTOs.
+- `workflows.scrape_and_store`: orchestration for scraping one scope and persisting results.
 - `lifecycle`: upsert, changed detection, missing handling.
 - `alerts`: local filter matching, Telegram sending, sent alert records.
 - `runner`: orchestration for due scopes.
