@@ -8,7 +8,7 @@ from psycopg import Connection
 
 from pet_sitting_palantir.kiwihousesitters.constants import DEFAULT_MAX_PAGES
 from pet_sitting_palantir.kiwihousesitters.scraper import ScrapeResult, scrape_scope
-from pet_sitting_palantir.kiwihousesitters.urls import build_search_url
+from pet_sitting_palantir.kiwihousesitters.search_filters import build_search_request
 from pet_sitting_palantir.storage import (
     ScrapeRunCounts,
     close_scrape_run,
@@ -81,7 +81,7 @@ def scrape_and_store_scope_with_connection(
     if scope is None:
         raise ValueError(f"Enabled scrape scope does not exist: {scope_name}")
 
-    search_url = build_search_url(scope.site_filter)
+    search_url = build_search_request(scope.site_filter).url
     run_id = create_scrape_run(
         connection,
         scope_id=scope.id,

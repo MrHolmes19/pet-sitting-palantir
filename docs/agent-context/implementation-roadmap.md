@@ -18,7 +18,8 @@ Goal: support all planned scopes and pagination.
 
 Deliverables:
 
-- `build_search_url(site_filter)`
+- `build_search_request(site_filter)`
+- site-filter slug to KiwiHouseSitters POST form conversion
 - `fetch_all_pages(initial_url)`
 - `parse_listing_card(card)`
 - Fixture-backed parser tests if sample HTML is available.

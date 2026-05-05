@@ -23,6 +23,30 @@ The search page appears to be server-side rendered. The initial HTML response co
 
 Do not use Playwright for v1 unless plain HTML scraping stops working.
 
+Filtered searches use a form POST to the same search URL, not query parameters. The
+site can be queried with a `requests.Session`:
+
+1. `GET /house-sitting-pet-sitting-jobs/search` to establish the session and fetch the base form.
+2. `POST /house-sitting-pet-sitting-jobs/search` with form fields such as `state`, `region`, and `subregion`.
+3. Parse the returned HTML like any other search page.
+
+Observed Auckland Central payload:
+
+```text
+view=list
+order=newentries
+newentries=0
+searchradius=50
+state=north-island
+region=33
+subregion=178
+```
+
+The database still stores readable filter slugs, for example
+`{"state":"north-island","region":"auckland","subregion":"auckland-central"}`.
+The KiwiHouseSitters adapter owns translating those slugs into the site's numeric
+form IDs.
+
 ## Pagination
 
 The first search page returns about 20 listings. More pages are discovered through a `showmore` link.
@@ -38,22 +62,29 @@ Observed pattern:
 Pseudo-flow:
 
 ```python
-url = initial_search_url_for_scope
+request = initial_search_request_for_scope
+url = request.url
+first_page = True
 
 while url:
-    html = fetch(url)
+    if first_page and request.form_data:
+        html = post_form(url, request.form_data)
+    else:
+        html = fetch(url)
+
     soup = BeautifulSoup(html, "html.parser")
     listings.extend(parse_listings(soup))
 
     next_link = soup.select_one("div[id^='showmore'] a")
     url = absolute_url(next_link["href"]) if next_link else None
+    first_page = False
 ```
 
 Important: do not try to create `searchid` manually. Start from the first page every time and follow the site's own pagination links.
 
 ## Known Search Filters
 
-The filter DOM has shown these query concepts:
+The filter DOM has shown these form concepts:
 
 - `newentries`
 - `features`
@@ -118,6 +149,13 @@ Known feature concepts include:
 - Suburban
 
 Features appear as `features=<id>` in the DOM. Exact IDs should be fixture-backed before being relied on.
+
+Known region/subregion IDs:
+
+| Stored slug | Site field | Site ID |
+| --- | --- | ---: |
+| `auckland` | `region` | 33 |
+| `auckland-central` | `subregion` | 178 |
 
 ## Listing Definition
 
