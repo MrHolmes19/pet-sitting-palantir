@@ -102,7 +102,8 @@ def test_main_supports_persist_output(monkeypatch, capsys) -> None:
     assert '"status": "success"' in output
 
 
-def test_settings_load_from_clean_environment(monkeypatch) -> None:
+def test_settings_load_from_clean_environment(monkeypatch, tmp_path) -> None:
+    monkeypatch.chdir(tmp_path)
     for name in (
         "SUPABASE_URL",
         "SUPABASE_SERVICE_ROLE_KEY",
@@ -119,3 +120,18 @@ def test_settings_load_from_clean_environment(monkeypatch) -> None:
     assert settings.database_url is None
     assert settings.telegram_bot_token is None
     assert settings.telegram_chat_id is None
+
+
+def test_settings_load_from_dotenv(monkeypatch, tmp_path) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    (tmp_path / ".env").write_text(
+        "DATABASE_URL=postgresql://palantir:palantir@localhost:54321/pet_sitting_palantir\n"
+    )
+
+    settings = load_settings()
+
+    assert (
+        settings.database_url
+        == "postgresql://palantir:palantir@localhost:54321/pet_sitting_palantir"
+    )
