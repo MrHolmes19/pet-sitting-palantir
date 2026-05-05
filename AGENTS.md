@@ -44,6 +44,12 @@ Build a low-cost personal scraper and alerting system for KiwiHouseSitters listi
 - Prefer small, testable increments.
 - Preserve scraping fixtures once they exist; parser changes should be fixture-tested.
 - Favor simple operational reliability over premature analytics features.
+- For local Postgres, prefer the repo scripts over long inline commands:
+  - `scripts/init-local-postgres.sh`
+  - `scripts/test-local-postgres.sh`
+  - `scripts/persist-local.sh auckland_central 1`
+  - `scripts/psql-local.sh`
+- Runtime settings load from environment variables and a repo-root `.env` file. Keep production code environment-driven; local database URLs belong in `.env` or scripts, not hardcoded app logic.
 
 ## Code Review
 

@@ -3,6 +3,8 @@
 from dataclasses import dataclass
 from os import getenv
 
+from dotenv import load_dotenv
+
 
 @dataclass(frozen=True)
 class Settings:
@@ -17,6 +19,8 @@ class Settings:
 
 def load_settings() -> Settings:
     """Load settings from environment variables."""
+    load_dotenv(dotenv_path=".env", override=False)
+
     return Settings(
         supabase_url=getenv("SUPABASE_URL"),
         supabase_service_role_key=getenv("SUPABASE_SERVICE_ROLE_KEY"),

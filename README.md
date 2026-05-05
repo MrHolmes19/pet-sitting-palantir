@@ -99,8 +99,13 @@ uv run python -m pet_sitting_palantir --scope all_nz --max-pages 1 --summary --p
 Scrape one database-backed scope and persist normalized listings:
 
 ```bash
-DATABASE_URL="postgresql://palantir:palantir@localhost:54321/pet_sitting_palantir" \
-  uv run python -m pet_sitting_palantir --scope auckland_central --max-pages 1 --persist --pretty
+scripts/persist-local.sh auckland_central 1
+```
+
+If `DATABASE_URL` is set in the environment or in a local `.env` file, you can also run:
+
+```bash
+uv run python -m pet_sitting_palantir --scope auckland_central --max-pages 1 --persist --pretty
 ```
 
 ## Database
@@ -115,6 +120,20 @@ Start a local Postgres database with Docker:
 
 ```bash
 docker compose up -d postgres
+```
+
+Initialize the persistent local database:
+
+```bash
+scripts/init-local-postgres.sh
+```
+
+The app loads `.env` from the current working directory. For local development, copy
+the example env file if you want to run the raw Python command without setting
+`DATABASE_URL` inline:
+
+```bash
+cp .env.example .env
 ```
 
 Run database integration tests against that local database:
@@ -138,16 +157,10 @@ Stop the local database:
 docker compose down
 ```
 
-Initialize the persistent local database for manual inspection:
-
-```bash
-scripts/init-local-postgres.sh
-```
-
 Open `psql`:
 
 ```bash
-docker compose exec postgres psql -U palantir -d pet_sitting_palantir
+scripts/psql-local.sh
 ```
 
 Useful inspection queries:

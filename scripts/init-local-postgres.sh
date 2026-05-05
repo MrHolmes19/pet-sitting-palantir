@@ -1,18 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-POSTGRES_SERVICE="postgres"
-POSTGRES_USER="palantir"
-POSTGRES_DB="pet_sitting_palantir"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/local-postgres-env.sh
+source "${SCRIPT_DIR}/local-postgres-env.sh"
+
 INITIAL_SCHEMA="supabase/migrations/20260503000100_initial_schema.sql"
 SEED_SQL="supabase/seed.sql"
 
-if ! command -v docker >/dev/null 2>&1; then
-  echo "Docker is required to initialize local Postgres." >&2
-  exit 1
-fi
+require_docker_compose "initialize local Postgres"
 
 docker compose up -d "${POSTGRES_SERVICE}"
+wait_for_local_postgres
 
 existing_table="$(
   docker compose exec -T "${POSTGRES_SERVICE}" \
