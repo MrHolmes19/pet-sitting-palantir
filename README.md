@@ -177,3 +177,7 @@ Run SQL integration tests against a real Postgres database:
 ```bash
 TEST_DATABASE_URL="$DATABASE_URL" uv run pytest tests/test_database_integration.py
 ```
+
+## Discovery
+
+One-off site discovery scripts live in [discovery](discovery).

@@ -152,10 +152,15 @@ Features appear as `features=<id>` in the DOM. Exact IDs should be fixture-backe
 
 Known region/subregion IDs:
 
-| Stored slug | Site field | Site ID |
-| --- | --- | ---: |
-| `auckland` | `region` | 33 |
-| `auckland-central` | `subregion` | 178 |
+The current human-reviewable map lives at:
+
+```text
+src/pet_sitting_palantir/kiwihousesitters/LOCATION_MAP.md
+```
+
+The one-off discovery workflow is documented in `discovery/README.md`. City/postcode
+autocomplete uses `/postcodes/autocomplete`, but v1 does not catalog city IDs because
+scopes are state/region/subregion based.
 
 ## Listing Definition
 
