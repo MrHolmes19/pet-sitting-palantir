@@ -1,6 +1,6 @@
 import pytest
 
-from pet_sitting_palantir.kiwihousesitters.constants import SEARCH_URL
+from pet_sitting_palantir.kiwihousesitters.constants import DEFAULT_SITE_FILTERS, SEARCH_URL
 from pet_sitting_palantir.kiwihousesitters.search_filters import (
     build_search_request,
     search_form_data_from_site_filter,
@@ -88,3 +88,8 @@ def test_unsupported_state_fails_before_scraping() -> None:
 def test_subregion_requires_region() -> None:
     with pytest.raises(ValueError, match="subregion filters require a region"):
         search_form_data_from_site_filter({"subregion": "auckland-central"})
+
+
+def test_default_site_filters_convert_to_site_form_data() -> None:
+    for site_filter in DEFAULT_SITE_FILTERS.values():
+        search_form_data_from_site_filter(site_filter)

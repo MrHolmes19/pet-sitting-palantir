@@ -75,6 +75,7 @@ def test_reads_enabled_scrape_scopes(postgres_connection) -> None:
         "auckland_central",
         "auckland_region",
         "north_island",
+        "north_shore_city",
     ]
     assert scopes[1].site_filter == {
         "state": "north-island",

@@ -27,6 +27,7 @@ Deliverables:
 Initial scopes:
 
 - `auckland_central`
+- `north_shore_city`
 - `auckland_region`
 - `north_island`
 - `all_nz`

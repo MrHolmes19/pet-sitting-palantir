@@ -94,6 +94,11 @@ DEFAULT_SITE_FILTERS = MappingProxyType(
         "all_nz": {},
         "north_island": {"state": "north-island"},
         "auckland_region": {"state": "north-island", "region": "auckland"},
+        "north_shore_city": {
+            "state": "north-island",
+            "region": "auckland",
+            "subregion": "north-shore-city",
+        },
         "auckland_central": {
             "state": "north-island",
             "region": "auckland",

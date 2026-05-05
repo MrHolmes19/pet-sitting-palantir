@@ -20,17 +20,15 @@ existing_table="$(
 )"
 
 if [[ "${existing_table}" == "scrape_scopes" ]]; then
-  echo "Local database schema already exists. Nothing to initialize."
-  echo "To start over, run: docker compose down -v"
-  exit 0
+  echo "Local database schema already exists. Applying seed data."
+else
+  docker compose exec -T "${POSTGRES_SERVICE}" \
+    psql -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" -v ON_ERROR_STOP=1 \
+    < "${INITIAL_SCHEMA}"
 fi
-
-docker compose exec -T "${POSTGRES_SERVICE}" \
-  psql -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" -v ON_ERROR_STOP=1 \
-  < "${INITIAL_SCHEMA}"
 
 docker compose exec -T "${POSTGRES_SERVICE}" \
   psql -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" -v ON_ERROR_STOP=1 \
   < "${SEED_SQL}"
 
-echo "Local database initialized with schema and seed data."
+echo "Local database is initialized with current seed data."

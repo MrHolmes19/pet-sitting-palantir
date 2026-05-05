@@ -12,9 +12,15 @@ values
     '{"state":"north-island","region":"auckland","subregion":"auckland-central"}'::jsonb
   ),
   (
+    'north_shore_city',
+    10,
+    3,
+    '{"state":"north-island","region":"auckland","subregion":"north-shore-city"}'::jsonb
+  ),
+  (
     'auckland_region',
-    15,
-    4,
+    60,
+    3,
     '{"state":"north-island","region":"auckland"}'::jsonb
   ),
   (
