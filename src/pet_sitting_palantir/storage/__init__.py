@@ -16,6 +16,7 @@ from pet_sitting_palantir.storage.models import (
 )
 from pet_sitting_palantir.storage.scrape_runs import close_scrape_run, create_scrape_run
 from pet_sitting_palantir.storage.scrape_scopes import (
+    read_due_scrape_scopes,
     read_enabled_scrape_scope,
     read_enabled_scrape_scopes,
 )
@@ -33,6 +34,7 @@ __all__ = [
     "listing_record_from_scraped_listing",
     "mark_expired_by_date",
     "mark_missing_listings_for_scope",
+    "read_due_scrape_scopes",
     "read_enabled_scrape_scope",
     "read_enabled_scrape_scopes",
     "upsert_listing",

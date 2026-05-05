@@ -7,6 +7,8 @@ from psycopg import Connection
 
 from pet_sitting_palantir.storage.models import ScrapeScope
 
+SCHEDULER_DUE_GRACE_SECONDS = 60
+
 
 def read_enabled_scrape_scopes(connection: Connection) -> list[ScrapeScope]:
     """Read all enabled scrape scopes in stable order."""
@@ -26,6 +28,36 @@ def read_enabled_scrape_scopes(connection: Connection) -> list[ScrapeScope]:
             where enabled = true
             order by name
             """
+        )
+        return [_scope_from_row(row) for row in cursor.fetchall()]
+
+
+def read_due_scrape_scopes(connection: Connection) -> list[ScrapeScope]:
+    """Read enabled scrape scopes whose successful interval has elapsed."""
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            select
+              id,
+              name,
+              enabled,
+              interval_minutes,
+              missing_threshold_runs,
+              site_filter,
+              last_attempt_at,
+              last_success_at
+            from scrape_scopes
+            where enabled = true
+              and (
+                last_success_at is null
+                or last_success_at
+                  <= now()
+                    - interval_minutes * interval '1 minute'
+                    + %s * interval '1 second'
+              )
+            order by interval_minutes, id
+            """,
+            (SCHEDULER_DUE_GRACE_SECONDS,),
         )
         return [_scope_from_row(row) for row in cursor.fetchall()]
 

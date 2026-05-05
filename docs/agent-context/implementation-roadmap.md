@@ -60,6 +60,7 @@ Deliverables:
 - Missing logic using `scope.missing_threshold_runs`.
 - Suspicious zero-result run handling that avoids missing inference.
 - Expiration handling for `expired_by_date`.
+- Due-scope runner using `last_success_at` and `interval_minutes`.
 
 ## Phase 5 - Telegram Alerts
 
@@ -81,7 +82,7 @@ Deliverables:
 - Workflow that runs every 5 minutes.
 - Secrets wiring.
 - Concurrency configuration.
-- Clear logs for each due scope.
+- Clear logs for the due-scope runner.
 
 Expected secrets:
 

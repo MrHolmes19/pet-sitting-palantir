@@ -16,11 +16,13 @@ from pet_sitting_palantir.storage import (
     create_scrape_run,
     listing_record_from_scraped_listing,
     mark_expired_by_date,
+    read_due_scrape_scopes,
     read_enabled_scrape_scope,
     read_enabled_scrape_scopes,
     upsert_listing,
     upsert_listings,
 )
+from pet_sitting_palantir.workflows.run_due_scopes import run_due_scrape_scopes_with_connection
 from pet_sitting_palantir.workflows.scrape_and_store import scrape_and_store_scope_with_connection
 
 try:
@@ -96,6 +98,56 @@ def test_reads_one_enabled_scrape_scope_by_name(postgres_connection) -> None:
         "region": "auckland",
         "subregion": "auckland-central",
     }
+
+
+@pytest.mark.integration
+def test_reads_due_scrape_scopes_by_cadence(postgres_connection) -> None:
+    assert [scope.name for scope in read_due_scrape_scopes(postgres_connection)] == [
+        "auckland_central",
+        "north_shore_city",
+        "auckland_region",
+        "north_island",
+        "all_nz",
+    ]
+
+    with postgres_connection.cursor() as cursor:
+        cursor.execute("update scrape_scopes set last_success_at = now()")
+
+    assert read_due_scrape_scopes(postgres_connection) == []
+
+    with postgres_connection.cursor() as cursor:
+        cursor.execute(
+            """
+            update scrape_scopes
+            set last_success_at = now() - interval '6 minutes'
+            where name = 'auckland_central'
+            """
+        )
+        cursor.execute(
+            """
+            update scrape_scopes
+            set last_success_at = now() - interval '8 minutes 30 seconds'
+            where name = 'north_shore_city'
+            """
+        )
+
+    assert [scope.name for scope in read_due_scrape_scopes(postgres_connection)] == [
+        "auckland_central"
+    ]
+
+    with postgres_connection.cursor() as cursor:
+        cursor.execute(
+            """
+            update scrape_scopes
+            set last_success_at = now() - interval '9 minutes 30 seconds'
+            where name = 'north_shore_city'
+            """
+        )
+
+    assert [scope.name for scope in read_due_scrape_scopes(postgres_connection)] == [
+        "auckland_central",
+        "north_shore_city",
+    ]
 
 
 @pytest.mark.integration
@@ -558,6 +610,61 @@ def test_mark_expired_by_date_closes_past_end_date_listing(postgres_connection) 
 
     assert row["status"] == "expired_by_date"
     assert row["closed_at"] is not None
+
+
+@pytest.mark.integration
+def test_run_due_scrape_scopes_runs_only_due_scopes(postgres_connection) -> None:
+    with postgres_connection.cursor() as cursor:
+        cursor.execute("update scrape_scopes set last_success_at = now()")
+        cursor.execute(
+            """
+            update scrape_scopes
+            set last_success_at = now() - interval '6 minutes'
+            where name = 'auckland_central'
+            """
+        )
+
+    def fake_scraper(site_filter, *, max_pages):
+        assert site_filter == {
+            "state": "north-island",
+            "region": "auckland",
+            "subregion": "auckland-central",
+        }
+        assert max_pages == 1
+        return ScrapeResult(
+            search_url="https://example.test/search",
+            pages_fetched=1,
+            listings=(_listing(external_id="due-runner-listing"),),
+        )
+
+    result = run_due_scrape_scopes_with_connection(
+        postgres_connection,
+        max_pages=1,
+        scraper=fake_scraper,
+    )
+
+    assert result.status == "success"
+    assert result.scopes_due == 1
+    assert result.scopes_succeeded == 1
+    assert result.scopes_failed == 0
+    assert result.results[0].scope_name == "auckland_central"
+
+    with postgres_connection.cursor() as cursor:
+        cursor.execute(
+            """
+            select scrape_runs.scope_name, scrape_runs.status, listings.external_id
+            from scrape_runs
+            join listings on listings.last_seen_run_id = scrape_runs.id
+            where listings.external_id = 'due-runner-listing'
+            """
+        )
+        row = cursor.fetchone()
+
+    assert row == {
+        "scope_name": "auckland_central",
+        "status": "success",
+        "external_id": "due-runner-listing",
+    }
 
 
 @pytest.mark.integration

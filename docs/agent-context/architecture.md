@@ -45,9 +45,9 @@ Current module boundaries:
 - `domain.models`: typed scraped listing objects.
 - `storage`: PostgreSQL reads, writes, and storage DTOs.
 - `workflows.scrape_and_store`: orchestration for scraping one scope and persisting results.
-- `lifecycle`: upsert, changed detection, missing handling.
+- `storage.lifecycle`: missing and expiration updates for persisted listings.
+- `workflows.run_due_scopes`: orchestration for database scopes whose interval is due.
 - `alerts`: local filter matching, Telegram sending, sent alert records.
-- `runner`: orchestration for due scopes.
 
 ## GitHub Actions
 

@@ -103,6 +103,59 @@ def test_main_supports_persist_output(monkeypatch, capsys) -> None:
     assert '"status": "success"' in output
 
 
+def test_main_supports_run_due_output(monkeypatch, capsys) -> None:
+    class FakeDueResult:
+        scopes_failed = 0
+
+        def to_dict(self) -> dict[str, object]:
+            return {
+                "status": "success",
+                "scopes_due": 1,
+                "scopes_succeeded": 1,
+                "scopes_failed": 0,
+                "results": [],
+                "failures": [],
+            }
+
+    monkeypatch.setattr(
+        "pet_sitting_palantir.main.run_due_scrape_scopes",
+        lambda max_pages: FakeDueResult(),
+    )
+    monkeypatch.setattr(
+        "sys.argv",
+        ["pet-sitting-palantir", "--run-due", "--max-pages", "1"],
+    )
+
+    assert main() == 0
+    output = capsys.readouterr().out
+    assert '"status": "success"' in output
+    assert '"scopes_due": 1' in output
+
+
+def test_main_returns_failure_when_run_due_has_failures(monkeypatch, capsys) -> None:
+    class FakeDueResult:
+        scopes_failed = 1
+
+        def to_dict(self) -> dict[str, object]:
+            return {
+                "status": "failed",
+                "scopes_due": 1,
+                "scopes_succeeded": 0,
+                "scopes_failed": 1,
+                "results": [],
+                "failures": [{"scope_name": "auckland_central", "error_message": "boom"}],
+            }
+
+    monkeypatch.setattr(
+        "pet_sitting_palantir.main.run_due_scrape_scopes",
+        lambda max_pages: FakeDueResult(),
+    )
+    monkeypatch.setattr("sys.argv", ["pet-sitting-palantir", "--run-due"])
+
+    assert main() == 1
+    assert '"status": "failed"' in capsys.readouterr().out
+
+
 def test_settings_load_from_clean_environment(monkeypatch, tmp_path) -> None:
     monkeypatch.chdir(tmp_path)
     for name in (

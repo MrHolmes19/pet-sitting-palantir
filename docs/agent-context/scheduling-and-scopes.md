@@ -32,6 +32,8 @@ run_due = last_success_at is null
 
 Use `last_success_at`, not `last_attempt_at`, so failed runs do not falsely advance the schedule.
 
+The implementation allows a small scheduler grace window before the exact interval boundary. GitHub Actions does not start on exact seconds, and without grace a fast 5-minute scope can miss a whole external scheduler tick because the previous successful run finished a few seconds after the previous tick.
+
 ## Scope Table
 
 `scrape_scopes` should hold runtime scope configuration:
