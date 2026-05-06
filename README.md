@@ -135,6 +135,11 @@ Initial scope seed data lives in `supabase/seed.sql`.
 
 Database record contracts are documented in `docs/contracts`.
 
+Listings first discovered during a scope's first successful scrape are stored
+with `first_seen_context = 'baseline'`. They may have existed before this
+system started watching, so lifetime analytics should normally use
+`first_seen_context = 'observed'`.
+
 Start a local Postgres database with Docker:
 
 ```bash

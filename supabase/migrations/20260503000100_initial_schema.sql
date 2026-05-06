@@ -106,6 +106,7 @@ create table listings (
   last_seen_at timestamptz not null default now(),
   first_seen_run_id bigint references scrape_runs(id),
   last_seen_run_id bigint references scrape_runs(id),
+  first_seen_context text not null default 'observed',
 
   status text not null default 'active',
   missing_count int not null default 0,
@@ -141,6 +142,9 @@ create table listings (
   constraint listings_other_pets_count_non_negative check (other_pets_count >= 0),
   constraint listings_reply_rating_score_range check (
     reply_rating_score is null or reply_rating_score between 0 and 10
+  ),
+  constraint listings_first_seen_context_check check (
+    first_seen_context in ('baseline', 'observed')
   ),
   constraint listings_status_check check (
     status in ('active', 'missing_once', 'missing_confirmed', 'expired_by_date')

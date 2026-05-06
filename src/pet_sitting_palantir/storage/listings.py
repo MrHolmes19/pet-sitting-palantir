@@ -1,7 +1,7 @@
 """Storage functions for listings."""
 
 from collections.abc import Iterable
-from typing import Any
+from typing import Any, Literal
 
 from psycopg import Connection
 
@@ -10,6 +10,8 @@ from pet_sitting_palantir.storage.models import (
     ListingUpsertResult,
     ListingUpsertSummary,
 )
+
+FirstSeenContext = Literal["baseline", "observed"]
 
 LISTING_COLUMNS = (
     "external_id",
@@ -48,6 +50,7 @@ def upsert_listing(
     *,
     listing: ListingRecord,
     run_id: int,
+    first_seen_context: FirstSeenContext = "observed",
 ) -> ListingUpsertResult:
     """Insert or update a listing by external_id."""
     _validate_listing_for_persistence(listing)
@@ -71,16 +74,18 @@ def upsert_listing(
                 insert into listings (
                   {", ".join(LISTING_COLUMNS)},
                   first_seen_run_id,
-                  last_seen_run_id
+                  last_seen_run_id,
+                  first_seen_context
                 )
                 values (
                   {", ".join(["%s"] * len(LISTING_COLUMNS))},
+                  %s,
                   %s,
                   %s
                 )
                 returning id
                 """,
-                (*values, run_id, run_id),
+                (*values, run_id, run_id, first_seen_context),
             )
             return ListingUpsertResult(
                 listing_id=cursor.fetchone()["id"],
@@ -117,6 +122,7 @@ def upsert_listings(
     *,
     listings: Iterable[ListingRecord],
     run_id: int,
+    first_seen_context: FirstSeenContext = "observed",
 ) -> ListingUpsertSummary:
     """Upsert a batch of listings and return counters for scrape_runs."""
     seen = 0
@@ -125,7 +131,12 @@ def upsert_listings(
 
     for listing in listings:
         seen += 1
-        result = upsert_listing(connection, listing=listing, run_id=run_id)
+        result = upsert_listing(
+            connection,
+            listing=listing,
+            run_id=run_id,
+            first_seen_context=first_seen_context,
+        )
         created += int(result.created)
         changed += int(result.changed)
 

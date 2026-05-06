@@ -244,7 +244,8 @@ def test_upserts_listing_by_external_id(postgres_connection) -> None:
               status,
               missing_count,
               first_seen_run_id,
-              last_seen_run_id
+              last_seen_run_id,
+              first_seen_context
             from listings
             where external_id = %s
             """,
@@ -258,6 +259,7 @@ def test_upserts_listing_by_external_id(postgres_connection) -> None:
     assert row["missing_count"] == 0
     assert row["first_seen_run_id"] == run_id
     assert row["last_seen_run_id"] == run_id
+    assert row["first_seen_context"] == "observed"
 
 
 @pytest.mark.integration
@@ -367,7 +369,7 @@ def test_scrape_and_store_scope_persists_scraper_result(postgres_connection) -> 
 
         cursor.execute(
             """
-            select external_id, title, region, subregion, starts_soon, status
+            select external_id, title, region, subregion, starts_soon, status, first_seen_context
             from listings
             where external_id = %s
             """,
@@ -390,6 +392,7 @@ def test_scrape_and_store_scope_persists_scraper_result(postgres_connection) -> 
         "subregion": "Auckland - Central",
         "starts_soon": True,
         "status": "active",
+        "first_seen_context": "baseline",
     }
 
 

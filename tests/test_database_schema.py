@@ -77,6 +77,7 @@ def test_listings_schema_keeps_preferred_column_order() -> None:
         "title text",
         "intro text",
         "url text not null",
+        "first_seen_context text not null default 'observed'",
     )
 
     positions = []
@@ -96,6 +97,7 @@ def test_schema_has_core_constraints_and_indexes() -> None:
         "island is null or island in ('North Island', 'South Island')",
         "constraint listings_total_animals_non_negative check (total_animals >= 0)",
         "reply_rating_score is null or reply_rating_score between 0 and 10",
+        "first_seen_context in ('baseline', 'observed')",
         "constraint sent_alerts_unique_listing_filter_channel_hash unique",
         "create index scrape_scopes_enabled_due_idx",
         "create index scrape_runs_scope_started_idx",

@@ -61,6 +61,7 @@ Deliverables:
 - Suspicious zero-result run handling that avoids missing inference.
 - Expiration handling for `expired_by_date`.
 - Due-scope runner using `last_success_at` and `interval_minutes`.
+- Baseline tagging for listings found during a scope's first successful scrape.
 
 ## Phase 5 - Telegram Alerts
 

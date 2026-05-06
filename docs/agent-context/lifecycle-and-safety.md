@@ -26,8 +26,16 @@ If it is new:
 ```text
 first_seen_at = now
 first_seen_run_id = current run
+first_seen_context = baseline if this scope has no previous successful run, else observed
 candidate_for_alert = true
 ```
+
+Use `first_seen_context` to keep analytics honest:
+
+- `baseline` listings were discovered during a scope's first successful scrape and may have been live before observation started.
+- `observed` listings were discovered after the scope had already established a baseline.
+
+Average listing-lifetime analytics should normally exclude `baseline` rows or treat them as left-censored observations.
 
 If it already exists:
 
