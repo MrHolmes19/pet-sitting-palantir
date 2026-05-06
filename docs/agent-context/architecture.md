@@ -67,6 +67,8 @@ concurrency:
   cancel-in-progress: false
 ```
 
+The production workflow uses `--max-pages all` so each due scope follows pagination until the site has no next page. The secret must not be printed to workflow logs.
+
 ## Expected Secrets
 
 - `SUPABASE_URL`

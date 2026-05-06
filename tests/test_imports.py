@@ -190,6 +190,34 @@ def test_main_returns_failure_when_run_due_has_failures(monkeypatch, capsys) -> 
     assert '"status": "failed"' in capsys.readouterr().out
 
 
+def test_main_supports_init_db_output(monkeypatch, capsys) -> None:
+    class FakeConnection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_value, traceback):
+            return False
+
+    class FakeInitResult:
+        def to_dict(self) -> dict[str, object]:
+            return {
+                "schema_applied": True,
+                "seed_applied": True,
+            }
+
+    monkeypatch.setattr("pet_sitting_palantir.main.connect_database", lambda: FakeConnection())
+    monkeypatch.setattr(
+        "pet_sitting_palantir.main.initialize_database",
+        lambda connection: FakeInitResult(),
+    )
+    monkeypatch.setattr("sys.argv", ["pet-sitting-palantir", "--init-db"])
+
+    assert main() == 0
+    output = capsys.readouterr().out
+    assert '"schema_applied": true' in output
+    assert '"seed_applied": true' in output
+
+
 def test_settings_load_from_clean_environment(monkeypatch, tmp_path) -> None:
     monkeypatch.chdir(tmp_path)
     for name in (

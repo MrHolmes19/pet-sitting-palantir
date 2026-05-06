@@ -6,6 +6,8 @@ import pytest
 from psycopg import sql
 from psycopg.rows import dict_row
 
+from pet_sitting_palantir.storage import initialize_database
+
 try:
     import psycopg
 except ImportError:  # pragma: no cover
@@ -86,6 +88,42 @@ def test_initial_schema_and_seed_apply_to_real_postgres() -> None:
                 assert scopes["north_shore_city"]["missing_threshold_runs"] == 3
                 assert scopes["auckland_region"]["interval_minutes"] == 60
                 assert scopes["all_nz"]["site_filter"] == {}
+            finally:
+                cursor.execute(
+                    sql.SQL("drop schema {} cascade").format(sql.Identifier(schema_name))
+                )
+
+
+@pytest.mark.integration
+def test_initialize_database_applies_schema_and_seed_to_real_postgres() -> None:
+    if psycopg is None:
+        pytest.skip("psycopg is not installed")
+
+    database_url = _database_url()
+    if not database_url:
+        pytest.skip("Set TEST_DATABASE_URL or DATABASE_URL to run this integration test")
+
+    schema_name = f"test_schema_{uuid4().hex}"
+
+    with psycopg.connect(database_url, autocommit=True, row_factory=dict_row) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(sql.SQL("create schema {}").format(sql.Identifier(schema_name)))
+            cursor.execute(
+                sql.SQL("set search_path to {}, public").format(sql.Identifier(schema_name))
+            )
+
+            try:
+                first_result = initialize_database(connection)
+                second_result = initialize_database(connection)
+
+                cursor.execute("select count(*) as scope_count from scrape_scopes")
+                row = cursor.fetchone()
+
+                assert first_result.schema_applied is True
+                assert first_result.seed_applied is True
+                assert second_result.schema_applied is False
+                assert second_result.seed_applied is False
+                assert row["scope_count"] == 5
             finally:
                 cursor.execute(
                     sql.SQL("drop schema {} cascade").format(sql.Identifier(schema_name))
