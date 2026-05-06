@@ -211,6 +211,9 @@ scripts/init-production-postgres.sh
 scripts/psql-production.sh
 ```
 
+Production scraping runs through GitHub Actions. The workflow is scheduled every
+5 minutes and can be run manually from the Actions tab.
+
 Useful inspection queries:
 
 ```sql

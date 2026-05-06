@@ -63,9 +63,11 @@ Prevent overlapping runs:
 
 ```yaml
 concurrency:
-  group: pet-sitter-scraper
+  group: pet-sitting-palantir-scrape
   cancel-in-progress: false
 ```
+
+The scheduled workflow uses the `DATABASE_URL` GitHub Actions secret. The value is written into a local `.env` file inside the ephemeral GitHub runner, then the app initializes the database schema if needed and seeds scrape scopes only when the scope table is empty. This preserves production scope edits made directly in the database.
 
 The production workflow uses `--max-pages all` so each due scope follows pagination until the site has no next page. The secret must not be printed to workflow logs.
 
