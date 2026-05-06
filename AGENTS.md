@@ -51,6 +51,7 @@ Build a low-cost personal scraper and alerting system for KiwiHouseSitters listi
   - `scripts/psql-local.sh`
 - Runtime settings load from environment variables and a repo-root `.env` file. Keep production code environment-driven; local database URLs belong in `.env` or scripts, not hardcoded app logic.
 - Production database credentials belong only in gitignored `.env.production` or GitHub Actions secrets. Local scripts must not accidentally target production; production scripts need explicit warning/confirmation.
+- Do not move files to the staged section unless the user explicitly asks for staging. Leave edits in the working changes section for user review by default.
 
 ## Code Review
 
