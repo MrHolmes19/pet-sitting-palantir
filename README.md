@@ -115,7 +115,7 @@ Run every database-backed scope that is due:
 scripts/run-due-local.sh 1
 ```
 
-If `DATABASE_URL` is set in the environment or in a local `.env` file, you can also run:
+If `DATABASE_URL` is set in a local `.env` file, you can also run:
 
 ```bash
 uv run python -m pet_sitting_palantir --run-due --max-pages 1 --pretty
@@ -160,6 +160,9 @@ the example env file if you want to run the raw Python command without setting
 cp .env.example .env
 ```
 
+The `*-local.sh` scripts always target the local Docker database, even if another
+`DATABASE_URL` exists in your shell.
+
 Run database integration tests against that local database:
 
 ```bash
@@ -185,6 +188,21 @@ Open `psql`:
 
 ```bash
 scripts/psql-local.sh
+```
+
+Production database access is intentionally separate. Store the Supabase
+connection string in a gitignored `.env.production` file:
+
+```bash
+cp .env.production.example .env.production
+```
+
+Use the production scripts only when you mean it. They print a production warning
+and require a typed confirmation before connecting:
+
+```bash
+scripts/init-production-postgres.sh
+scripts/psql-production.sh
 ```
 
 Useful inspection queries:

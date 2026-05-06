@@ -50,6 +50,7 @@ Build a low-cost personal scraper and alerting system for KiwiHouseSitters listi
   - `scripts/persist-local.sh auckland_central 1`
   - `scripts/psql-local.sh`
 - Runtime settings load from environment variables and a repo-root `.env` file. Keep production code environment-driven; local database URLs belong in `.env` or scripts, not hardcoded app logic.
+- Production database credentials belong only in gitignored `.env.production` or GitHub Actions secrets. Local scripts must not accidentally target production; production scripts need explicit warning/confirmation.
 
 ## Code Review
 
