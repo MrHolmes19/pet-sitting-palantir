@@ -83,6 +83,8 @@ Deliverables:
 - Workflow that runs every 5 minutes.
 - Secrets wiring.
 - Concurrency configuration.
+- Remote database initialization command.
+- Production run uses `--max-pages all`.
 - Clear logs for the due-scope runner.
 
 Expected secrets:

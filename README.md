@@ -115,6 +115,12 @@ Run every database-backed scope that is due:
 scripts/run-due-local.sh 1
 ```
 
+Use `all` to follow pagination until the site has no next page:
+
+```bash
+scripts/run-due-local.sh all
+```
+
 If `DATABASE_URL` is set in a local `.env` file, you can also run:
 
 ```bash
