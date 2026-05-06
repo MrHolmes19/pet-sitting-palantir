@@ -14,6 +14,7 @@ from pet_sitting_palantir.storage.models import (
     ScrapeRunCounts,
     ScrapeScope,
 )
+from pet_sitting_palantir.storage.schema import DatabaseInitResult, initialize_database
 from pet_sitting_palantir.storage.scrape_runs import close_scrape_run, create_scrape_run
 from pet_sitting_palantir.storage.scrape_scopes import (
     read_due_scrape_scopes,
@@ -22,6 +23,7 @@ from pet_sitting_palantir.storage.scrape_scopes import (
 )
 
 __all__ = [
+    "DatabaseInitResult",
     "ListingRecord",
     "ListingUpsertResult",
     "ListingUpsertSummary",
@@ -31,6 +33,7 @@ __all__ = [
     "connect_database",
     "create_scrape_run",
     "database_connection",
+    "initialize_database",
     "listing_record_from_scraped_listing",
     "mark_expired_by_date",
     "mark_missing_listings_for_scope",
