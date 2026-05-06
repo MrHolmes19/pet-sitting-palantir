@@ -124,7 +124,7 @@ Use GitHub Actions concurrency:
 
 ```yaml
 concurrency:
-  group: pet-sitter-scraper
+  group: pet-sitting-palantir-scrape
   cancel-in-progress: false
 ```
 
