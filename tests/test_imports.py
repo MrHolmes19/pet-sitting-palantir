@@ -132,6 +132,40 @@ def test_main_supports_run_due_output(monkeypatch, capsys) -> None:
     assert '"scopes_due": 1' in output
 
 
+def test_main_supports_all_pages(monkeypatch, capsys) -> None:
+    class FakeDueResult:
+        scopes_failed = 0
+
+        def to_dict(self) -> dict[str, object]:
+            return {
+                "status": "nothing_due",
+                "scopes_due": 0,
+                "scopes_succeeded": 0,
+                "scopes_failed": 0,
+                "results": [],
+                "failures": [],
+            }
+
+    captured_max_pages = []
+
+    def fake_run_due_scrape_scopes(max_pages):
+        captured_max_pages.append(max_pages)
+        return FakeDueResult()
+
+    monkeypatch.setattr(
+        "pet_sitting_palantir.main.run_due_scrape_scopes",
+        fake_run_due_scrape_scopes,
+    )
+    monkeypatch.setattr(
+        "sys.argv",
+        ["pet-sitting-palantir", "--run-due", "--max-pages", "all"],
+    )
+
+    assert main() == 0
+    assert captured_max_pages == [None]
+    assert '"status": "nothing_due"' in capsys.readouterr().out
+
+
 def test_main_returns_failure_when_run_due_has_failures(monkeypatch, capsys) -> None:
     class FakeDueResult:
         scopes_failed = 1

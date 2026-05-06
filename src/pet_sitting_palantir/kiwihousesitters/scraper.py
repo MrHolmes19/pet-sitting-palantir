@@ -23,7 +23,7 @@ class ScrapeResult:
 def scrape_scope(
     site_filter: Mapping[str, Any] | None = None,
     *,
-    max_pages: int = DEFAULT_MAX_PAGES,
+    max_pages: int | None = DEFAULT_MAX_PAGES,
     client: KiwiHouseSittersClient | None = None,
 ) -> ScrapeResult:
     """Scrape a KiwiHouseSitters search scope."""

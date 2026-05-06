@@ -91,6 +91,12 @@ Fetch the first KiwiHouseSitters search page and print normalized JSON:
 uv run python -m pet_sitting_palantir --scope all_nz --max-pages 1 --pretty
 ```
 
+Follow pagination until the site has no next page:
+
+```bash
+uv run python -m pet_sitting_palantir --scope all_nz --max-pages all --pretty
+```
+
 Print a compact summary instead of every parsed field:
 
 ```bash

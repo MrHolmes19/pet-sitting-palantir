@@ -43,7 +43,7 @@ class DueScopeRunResult:
 
 def run_due_scrape_scopes(
     *,
-    max_pages: int = DEFAULT_MAX_PAGES,
+    max_pages: int | None = DEFAULT_MAX_PAGES,
     database_url: str | None = None,
     scraper: Scraper | None = None,
 ) -> DueScopeRunResult:
@@ -62,7 +62,7 @@ def run_due_scrape_scopes(
 def run_due_scrape_scopes_with_connection(
     connection: Connection,
     *,
-    max_pages: int = DEFAULT_MAX_PAGES,
+    max_pages: int | None = DEFAULT_MAX_PAGES,
     scraper: Scraper | None = None,
 ) -> DueScopeRunResult:
     """Run due scopes using an existing database connection."""

@@ -69,9 +69,9 @@ def _parse_args() -> Namespace:
     )
     parser.add_argument(
         "--max-pages",
-        type=_positive_int,
+        type=_max_pages,
         default=DEFAULT_MAX_PAGES,
-        help="Maximum number of paginated search result pages to fetch.",
+        help="Maximum number of paginated search result pages to fetch, or 'all'.",
     )
     parser.add_argument(
         "--pretty",
@@ -96,7 +96,9 @@ def _parse_args() -> Namespace:
     return parser.parse_args()
 
 
-def _positive_int(value: str) -> int:
+def _max_pages(value: str) -> int | None:
+    if value == "all":
+        return None
     parsed_value = int(value)
     if parsed_value < 1:
         raise ArgumentTypeError("--max-pages must be greater than zero")

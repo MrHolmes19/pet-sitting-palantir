@@ -55,14 +55,14 @@ class KiwiHouseSittersClient:
         self,
         initial_url: str,
         *,
-        max_pages: int,
+        max_pages: int | None,
         first_page_form_data: Mapping[str, str] | None = None,
     ) -> Iterator[PageFetch]:
         """Fetch search result pages by following the site's show-more links."""
         page_number = 1
         next_url: str | None = initial_url
 
-        while next_url and page_number <= max_pages:
+        while next_url and (max_pages is None or page_number <= max_pages):
             if page_number == 1 and first_page_form_data is not None:
                 self.fetch_html(next_url)
                 html = self.post_html(next_url, data=first_page_form_data)
