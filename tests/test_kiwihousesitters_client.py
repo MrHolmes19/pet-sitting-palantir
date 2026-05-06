@@ -82,6 +82,34 @@ def test_fetch_search_pages_follows_showmore_link_and_stops() -> None:
     ]
 
 
+def test_fetch_search_pages_without_page_limit_stops_when_showmore_ends() -> None:
+    page_one_html = """
+    <div id="showmore1">
+      <a href="/house-sitting-pet-sitting-jobs/search?searchid=test&amp;page=2">
+        Show more listings
+      </a>
+    </div>
+    """
+    page_two_html = "<div class='search-list-results'></div>"
+    fake_session = FakeSession(
+        [
+            FakeResponse(status_code=200, text=page_one_html),
+            FakeResponse(status_code=200, text=page_two_html),
+        ]
+    )
+    client = KiwiHouseSittersClient()
+    client._session = fake_session
+
+    pages = tuple(
+        client.fetch_search_pages(
+            "https://www.kiwihousesitters.co.nz/house-sitting-pet-sitting-jobs/search",
+            max_pages=None,
+        )
+    )
+
+    assert [page.page_number for page in pages] == [1, 2]
+
+
 def test_fetch_search_pages_posts_filtered_first_page_then_follows_showmore() -> None:
     initial_html = "<html></html>"
     filtered_page_html = """

@@ -82,6 +82,8 @@ while url:
 
 Important: do not try to create `searchid` manually. Start from the first page every time and follow the site's own pagination links.
 
+Production scheduled scraping should use `--max-pages all` so each due scope follows pagination until the site stops exposing a next page. Local runs may pass a numeric `--max-pages` to limit site load while testing.
+
 ## Known Search Filters
 
 The filter DOM has shown these form concepts:

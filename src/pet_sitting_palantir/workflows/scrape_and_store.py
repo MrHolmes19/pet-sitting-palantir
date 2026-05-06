@@ -29,7 +29,7 @@ class Scraper(Protocol):
         self,
         site_filter: Mapping[str, Any] | None = None,
         *,
-        max_pages: int = DEFAULT_MAX_PAGES,
+        max_pages: int | None = DEFAULT_MAX_PAGES,
     ) -> ScrapeResult: ...
 
 
@@ -55,7 +55,7 @@ class StoredScrapeResult:
 def scrape_and_store_scope(
     *,
     scope_name: str,
-    max_pages: int = DEFAULT_MAX_PAGES,
+    max_pages: int | None = DEFAULT_MAX_PAGES,
     database_url: str | None = None,
     scraper: Scraper = scrape_scope,
 ) -> StoredScrapeResult:
@@ -76,7 +76,7 @@ def scrape_and_store_scope_with_connection(
     connection: Connection,
     *,
     scope_name: str,
-    max_pages: int = DEFAULT_MAX_PAGES,
+    max_pages: int | None = DEFAULT_MAX_PAGES,
     scraper: Scraper = scrape_scope,
 ) -> StoredScrapeResult:
     """Scrape one enabled scope using an existing database connection."""
@@ -118,7 +118,12 @@ def scrape_and_store_scope_with_connection(
                 status="suspicious",
             )
 
-        summary = upsert_listings(connection, listings=records, run_id=run_id)
+        summary = upsert_listings(
+            connection,
+            listings=records,
+            run_id=run_id,
+            first_seen_context="baseline" if scope.last_success_at is None else "observed",
+        )
         missing_marked = mark_missing_listings_for_scope(
             connection,
             scope=scope,

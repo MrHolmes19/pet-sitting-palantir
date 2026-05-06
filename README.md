@@ -91,6 +91,12 @@ Fetch the first KiwiHouseSitters search page and print normalized JSON:
 uv run python -m pet_sitting_palantir --scope all_nz --max-pages 1 --pretty
 ```
 
+Follow pagination until the site has no next page:
+
+```bash
+uv run python -m pet_sitting_palantir --scope all_nz --max-pages all --pretty
+```
+
 Print a compact summary instead of every parsed field:
 
 ```bash
@@ -128,6 +134,11 @@ Schema SQL lives in `supabase/migrations`.
 Initial scope seed data lives in `supabase/seed.sql`.
 
 Database record contracts are documented in `docs/contracts`.
+
+Listings first discovered during a scope's first successful scrape are stored
+with `first_seen_context = 'baseline'`. They may have existed before this
+system started watching, so lifetime analytics should normally use
+`first_seen_context = 'observed'`.
 
 Start a local Postgres database with Docker:
 

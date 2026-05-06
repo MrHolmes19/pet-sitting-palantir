@@ -104,7 +104,7 @@ create table listings (
   id bigserial primary key,
 
   external_id text not null unique,
-  content_hash text,
+  content_hash text not null,
 
   island text,
   region text,
@@ -142,6 +142,7 @@ create table listings (
   last_seen_at timestamptz not null default now(),
   first_seen_run_id bigint references scrape_runs(id),
   last_seen_run_id bigint references scrape_runs(id),
+  first_seen_context text not null default 'observed',
 
   status text not null default 'active',
   missing_count int not null default 0,
@@ -152,6 +153,11 @@ create table listings (
   updated_at timestamptz not null default now()
 );
 ```
+
+`first_seen_context` marks whether a listing is safe for listing-lifetime analytics:
+
+- `baseline`: first seen during a scope's first successful scrape. The listing may have been live before this system started observing, so it is left-censored and should be excluded from average listing-time calculations unless handled separately.
+- `observed`: first seen after that scope already had a successful baseline observation.
 
 Suggested indexes:
 

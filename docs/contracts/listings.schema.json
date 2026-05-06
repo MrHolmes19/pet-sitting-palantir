@@ -203,6 +203,14 @@
       ],
       "description": "Run id that most recently saw this listing."
     },
+    "first_seen_context": {
+      "type": "string",
+      "enum": [
+        "baseline",
+        "observed"
+      ],
+      "description": "Whether first_seen_at came from an initial baseline scrape or a normal observation. Baseline listings are left-censored for lifetime analytics."
+    },
     "status": {
       "type": "string",
       "enum": [
@@ -279,6 +287,7 @@
     "last_seen_at",
     "first_seen_run_id",
     "last_seen_run_id",
+    "first_seen_context",
     "status",
     "missing_count",
     "missing_since",
@@ -321,6 +330,7 @@
       "last_seen_at": "2026-05-03T10:00:00Z",
       "first_seen_run_id": 101,
       "last_seen_run_id": 101,
+      "first_seen_context": "observed",
       "status": "active",
       "missing_count": 0,
       "missing_since": null,
