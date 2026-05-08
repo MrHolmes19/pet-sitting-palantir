@@ -84,6 +84,48 @@ Important: do not try to create `searchid` manually. Start from the first page e
 
 Production scheduled scraping should use `--max-pages all` so each due scope follows pagination until the site stops exposing a next page. Local runs may pass a numeric `--max-pages` to limit site load while testing.
 
+## Search Result Cap And Splitting
+
+KiwiHouseSitters appears to cap broad searches at about 200 exposed listings.
+The site can show an "AND THERE'S MORE..." message instead of exposing all
+results. A capped search is incomplete and must not be used for missing-listing
+lifecycle inference.
+
+Before scraping a broad scope fully, parse the first page filter counts to
+estimate whether the result set is over the cap. Use `200` as the cap threshold.
+If the count is greater than 200, split before collecting listing pages.
+
+Preferred split order:
+
+1. Location hierarchy.
+2. Sit length, only if a subregion-level search still exceeds 200.
+
+Location hierarchy:
+
+- All New Zealand should not scrape as one unfiltered search. Expand it into
+  North Island and South Island child searches.
+- Island searches over 200 should expand into region child searches.
+- Region searches over 200 should expand into subregion child searches.
+- Subregion searches are expected to stay below the cap in normal operation.
+
+Sit length is the fallback split because it tends to distribute listings better
+than house type. House type is not a preferred primary split because most
+listings are usually `House`, so it often leaves the largest bucket capped.
+
+Known sit length IDs:
+
+| ID | Meaning |
+| ---: | --- |
+| 60 | 0 - 1 week |
+| 61 | 1 - 2 weeks |
+| 62 | 2 - 4 weeks |
+| 63 | 1 - 2 months |
+| 64 | 2 months + |
+
+If a child search still hits the explicit capped-results message after splitting,
+treat that run as suspicious or otherwise incomplete, keep any safely parsed
+listings, and skip missing marking for that child.
+
 ## Known Search Filters
 
 The filter DOM has shown these form concepts:

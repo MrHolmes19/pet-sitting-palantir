@@ -1,7 +1,12 @@
 from datetime import date
 from pathlib import Path
 
-from pet_sitting_palantir.kiwihousesitters.parser import parse_search_page
+from pet_sitting_palantir.kiwihousesitters.parser import (
+    parse_estimated_result_count,
+    parse_search_filter_counts,
+    parse_search_page,
+    search_page_has_cap_notice,
+)
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
@@ -74,3 +79,50 @@ def test_parse_search_page_extracts_multiple_real_page_style_cards() -> None:
     assert listings[1].region == "Wairarapa"
     assert listings[1].total_animals == 4
     assert listings[1].starts_soon is False
+
+
+def test_parse_search_filter_counts_extracts_sit_lengths_and_estimated_total() -> None:
+    html = """
+    <li id="sit-length-options" class="check-list" style="display:none;">
+      <div data-featureid="60" class="feature-filter">
+        <a
+          href="/house-sitting-pet-sitting-jobs/search?display=list&amp;state=north-island&amp;sitlengths=60"
+        >
+          <span class="label">0 - 1 week (98)</span>
+        </a>
+      </div>
+      <div data-featureid="61" class="feature-filter">
+        <a
+          href="/house-sitting-pet-sitting-jobs/search?display=list&amp;state=north-island&amp;sitlengths=61"
+        >
+          <span class="label">1 - 2 weeks (109)</span>
+        </a>
+      </div>
+      <div data-featureid="62" class="feature-filter">
+        <a
+          href="/house-sitting-pet-sitting-jobs/search?display=list&amp;state=north-island&amp;sitlengths=62"
+        >
+          <span class="label">2 - 4 weeks (134)</span>
+        </a>
+      </div>
+    </li>
+    """
+
+    counts = parse_search_filter_counts(html)
+
+    assert [(count.field, count.value, count.count) for count in counts] == [
+        ("sitlengths", "60", 98),
+        ("sitlengths", "61", 109),
+        ("sitlengths", "62", 134),
+    ]
+    assert parse_estimated_result_count(html) == 341
+
+
+def test_search_page_has_cap_notice_detects_hidden_result_message() -> None:
+    html = """
+    <div class="search-list-results"></div>
+    <h3>And there's more...</h3>
+    <p>Rather than show you the whole list, add filters.</p>
+    """
+
+    assert search_page_has_cap_notice(html) is True

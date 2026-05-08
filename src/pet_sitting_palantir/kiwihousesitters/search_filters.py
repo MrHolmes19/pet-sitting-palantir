@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from pet_sitting_palantir.kiwihousesitters.constants import SEARCH_URL
+from pet_sitting_palantir.kiwihousesitters.constants import SEARCH_URL, SIT_LENGTH_IDS
 from pet_sitting_palantir.kiwihousesitters.location_map import REGION_FILTERS, STATE_LABELS
 
 SearchMethod = Literal["GET", "POST"]
@@ -56,6 +56,7 @@ def search_form_data_from_site_filter(site_filter: Mapping[str, Any]) -> dict[st
     state = _optional_string(site_filter, "state")
     region = _optional_string(site_filter, "region")
     subregion = _optional_string(site_filter, "subregion")
+    sitlengths = _optional_string(site_filter, "sitlengths")
 
     if state:
         _validate_state(state)
@@ -69,6 +70,9 @@ def search_form_data_from_site_filter(site_filter: Mapping[str, Any]) -> dict[st
         if not region:
             raise ValueError("subregion filters require a region")
         form_data["subregion"] = _site_subregion_id(region, subregion)
+    if sitlengths:
+        _validate_sitlengths(sitlengths)
+        form_data["sitlengths"] = sitlengths
 
     return form_data
 
@@ -102,3 +106,8 @@ def _site_subregion_id(region: str, subregion: str) -> str:
         raise ValueError(
             f"Unsupported KiwiHouseSitters subregion filter: {region}/{subregion}"
         ) from error
+
+
+def _validate_sitlengths(sitlengths: str) -> None:
+    if sitlengths not in SIT_LENGTH_IDS:
+        raise ValueError(f"Unsupported KiwiHouseSitters sitlengths filter: {sitlengths}")
