@@ -124,10 +124,14 @@ def scrape_and_store_scope_with_connection(
             run_id=run_id,
             first_seen_context="baseline" if scope.last_success_at is None else "observed",
         )
-        missing_marked = mark_missing_listings_for_scope(
-            connection,
-            scope=scope,
-            seen_external_ids={record.external_id for record in records},
+        missing_marked = (
+            0
+            if scope.last_success_at is None
+            else mark_missing_listings_for_scope(
+                connection,
+                scope=scope,
+                seen_external_ids={record.external_id for record in records},
+            )
         )
         mark_expired_by_date(connection)
         counts = ScrapeRunCounts(

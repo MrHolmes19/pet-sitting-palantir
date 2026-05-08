@@ -423,6 +423,14 @@ def test_successful_scrape_marks_only_missing_listings_covered_by_scope(
         ),
         run_id=seed_run_id,
     )
+    with postgres_connection.cursor() as cursor:
+        cursor.execute(
+            """
+            update scrape_scopes
+            set last_success_at = now()
+            where name = 'auckland_central'
+            """
+        )
 
     def fake_scraper(site_filter, *, max_pages):
         return ScrapeResult(
@@ -462,6 +470,58 @@ def test_successful_scrape_marks_only_missing_listings_covered_by_scope(
 
 
 @pytest.mark.integration
+def test_first_successful_scope_run_does_not_mark_missing(
+    postgres_connection,
+) -> None:
+    seed_run_id = create_scrape_run(
+        postgres_connection,
+        scope_id=None,
+        scope_name="manual_seed",
+    )
+    upsert_listing(
+        postgres_connection,
+        listing=listing_record_from_scraped_listing(
+            _listing(external_id="existing-covered", title="Existing covered")
+        ),
+        run_id=seed_run_id,
+    )
+
+    def fake_scraper(site_filter, *, max_pages):
+        return ScrapeResult(
+            search_url="https://example.test/search",
+            pages_fetched=1,
+            listings=(_listing(external_id="first-run-seen", title="First run seen"),),
+        )
+
+    result = scrape_and_store_scope_with_connection(
+        postgres_connection,
+        scope_name="auckland_central",
+        scraper=fake_scraper,
+    )
+
+    assert result.status == "success"
+    assert result.missing_marked == 0
+
+    with postgres_connection.cursor() as cursor:
+        cursor.execute(
+            """
+            select external_id, status, missing_count, missing_since, closed_at
+            from listings
+            where external_id in ('existing-covered', 'first-run-seen')
+            order by external_id
+            """
+        )
+        rows = {row["external_id"]: row for row in cursor.fetchall()}
+
+    assert rows["existing-covered"]["status"] == "active"
+    assert rows["existing-covered"]["missing_count"] == 0
+    assert rows["existing-covered"]["missing_since"] is None
+    assert rows["existing-covered"]["closed_at"] is None
+    assert rows["first-run-seen"]["status"] == "active"
+    assert rows["first-run-seen"]["missing_count"] == 0
+
+
+@pytest.mark.integration
 def test_missing_listing_reaching_threshold_becomes_missing_confirmed(
     postgres_connection,
 ) -> None:
@@ -485,6 +545,13 @@ def test_missing_listing_reaching_threshold_becomes_missing_confirmed(
                 missing_count = 5,
                 missing_since = now()
             where external_id = 'threshold-missing'
+            """
+        )
+        cursor.execute(
+            """
+            update scrape_scopes
+            set last_success_at = now()
+            where name = 'auckland_central'
             """
         )
 
@@ -668,6 +735,77 @@ def test_run_due_scrape_scopes_runs_only_due_scopes(postgres_connection) -> None
         "status": "success",
         "external_id": "due-runner-listing",
     }
+
+
+@pytest.mark.integration
+def test_run_due_scrape_scopes_runs_only_broadest_scope_on_fresh_database(
+    postgres_connection,
+) -> None:
+    seen_filters = []
+
+    def fake_scraper(site_filter, *, max_pages):
+        seen_filters.append(site_filter)
+        return ScrapeResult(
+            search_url="https://example.test/search",
+            pages_fetched=1,
+            listings=(_listing(external_id="fresh-baseline-listing"),),
+        )
+
+    result = run_due_scrape_scopes_with_connection(
+        postgres_connection,
+        max_pages=1,
+        scraper=fake_scraper,
+    )
+
+    assert result.status == "success"
+    assert result.scopes_due == 1
+    assert result.scopes_succeeded == 1
+    assert result.results[0].scope_name == "all_nz"
+    assert seen_filters == [{}]
+
+
+@pytest.mark.integration
+def test_run_due_scrape_scopes_skips_due_subregions_when_region_is_due(
+    postgres_connection,
+) -> None:
+    with postgres_connection.cursor() as cursor:
+        cursor.execute("update scrape_scopes set last_success_at = now()")
+        cursor.execute(
+            """
+            update scrape_scopes
+            set last_success_at = now() - interval '6 minutes'
+            where name = 'auckland_central'
+            """
+        )
+        cursor.execute(
+            """
+            update scrape_scopes
+            set last_success_at = now() - interval '61 minutes'
+            where name = 'auckland_region'
+            """
+        )
+
+    seen_filters = []
+
+    def fake_scraper(site_filter, *, max_pages):
+        seen_filters.append(site_filter)
+        return ScrapeResult(
+            search_url="https://example.test/search",
+            pages_fetched=1,
+            listings=(_listing(external_id="region-due-listing"),),
+        )
+
+    result = run_due_scrape_scopes_with_connection(
+        postgres_connection,
+        max_pages=1,
+        scraper=fake_scraper,
+    )
+
+    assert result.status == "success"
+    assert result.scopes_due == 1
+    assert result.scopes_succeeded == 1
+    assert result.results[0].scope_name == "auckland_region"
+    assert seen_filters == [{"state": "north-island", "region": "auckland"}]
 
 
 @pytest.mark.integration
