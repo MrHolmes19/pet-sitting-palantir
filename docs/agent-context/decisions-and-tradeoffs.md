@@ -4,9 +4,15 @@ This file records conceptual product and architecture decisions as they are made
 
 ## Frequency
 
-We want early notifications, but GitHub Actions does not support schedules below 5 minutes. Going below 5 minutes would push the project toward paid services, an always-on worker, or a more complex hosting setup.
+We want early notifications, but GitHub Actions is not reliable enough to be the
+long-term scheduler for fast alerts. It accepts cron syntax such as
+`*/5 * * * *`, but scheduled workflows are best-effort. Production observation
+showed the scraper running much less often than every 5 minutes.
 
-Decision: keep GitHub Actions at 5 minutes for v1 and use database-backed scopes to control actual scrape frequency.
+Decision: keep the GitHub Actions workflow disabled until scraper splitting and
+lifecycle safety are fixed. If GitHub Actions is re-enabled, treat it as a cheap
+opportunistic runner, not a dependable 5-minute alerting scheduler. For reliable
+fast Auckland alerts, use an external scheduler or always-on worker.
 
 ## Geographic Priority
 
@@ -30,7 +36,23 @@ Decision: prefer cheap, boring infrastructure and small implementation phases. A
 
 Fast alerts matter, but the scraper should avoid unnecessary request volume against KiwiHouseSitters.
 
-Decision: use staggered scopes instead of scraping every geographic level every 5 minutes.
+Decision: use staggered root scopes and dynamic child searches instead of
+scraping every geographic level every 5 minutes. When overlapping scopes are due
+together, run the broadest applicable scope and skip narrower covered scopes in
+that invocation.
+
+## Broad Search Completeness
+
+KiwiHouseSitters broad searches can be capped around 200 visible listings. A
+broad capped result is useful as a signal that the search must be split, but it
+is not complete enough for lifecycle inference or historical completeness.
+
+Decision: do not scrape All New Zealand as one unfiltered search. Either schedule
+North Island and South Island separately or keep `all_nz` as a logical root that
+expands into island child searches at runtime. Split over-cap searches by
+location first, then by sit length only if a subregion still exceeds the cap.
+Avoid house type as the primary split because the `House` bucket usually remains
+too large.
 
 ## Listing Persistence Shape
 
