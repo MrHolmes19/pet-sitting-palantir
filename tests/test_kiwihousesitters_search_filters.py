@@ -62,6 +62,19 @@ def test_south_island_region_and_subregion_use_discovered_ids() -> None:
     assert form_data["subregion"] == "544"
 
 
+def test_sitlengths_scope_uses_site_filter_id() -> None:
+    form_data = search_form_data_from_site_filter(
+        {
+            "state": "north-island",
+            "region": "auckland",
+            "subregion": "auckland-central",
+            "sitlengths": "60",
+        }
+    )
+
+    assert form_data["sitlengths"] == "60"
+
+
 def test_north_island_scope_uses_state_without_region_ids() -> None:
     form_data = search_form_data_from_site_filter({"state": "north-island"})
 
@@ -83,6 +96,11 @@ def test_region_must_belong_to_state() -> None:
 def test_unsupported_state_fails_before_scraping() -> None:
     with pytest.raises(ValueError, match="Unsupported KiwiHouseSitters state"):
         search_form_data_from_site_filter({"state": "not-mapped"})
+
+
+def test_unsupported_sitlengths_fails_before_scraping() -> None:
+    with pytest.raises(ValueError, match="Unsupported KiwiHouseSitters sitlengths"):
+        search_form_data_from_site_filter({"sitlengths": "not-mapped"})
 
 
 def test_subregion_requires_region() -> None:

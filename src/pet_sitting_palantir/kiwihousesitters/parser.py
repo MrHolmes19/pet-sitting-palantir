@@ -1,9 +1,9 @@
 """HTML parser for KiwiHouseSitters search result pages."""
 
 import re
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import date, datetime
-from urllib.parse import urljoin
+from urllib.parse import parse_qs, urljoin, urlparse
 
 from bs4 import BeautifulSoup, Tag
 
@@ -30,6 +30,7 @@ from pet_sitting_palantir.kiwihousesitters.constants import (
     REGION_TO_ISLAND,
     REPLY_RATING_IMAGE_SELECTOR,
     REPLY_RATING_PATTERN,
+    SEARCH_CAP_NOTICE_TEXT,
     STARTS_SOON_SELECTOR,
     TITLE_LINK_SELECTOR,
 )
@@ -42,11 +43,83 @@ AUCKLAND_SUBREGION_ALIASES = {
     "West": "Auckland - West",
 }
 
+FILTER_COUNT_QUERY_FIELDS = (
+    "subregion",
+    "region",
+    "sitlengths",
+    "housetype",
+    "state",
+)
+FILTER_COUNT_TOTAL_FIELDS = ("sitlengths", "housetype")
+FILTER_COUNT_PATTERN = re.compile(r"^(?P<label>.+?)\s*\((?P<count>[\d,]+)\)\s*$")
+
+
+@dataclass(frozen=True)
+class SearchFilterCount:
+    """One visible search-filter option with a result count."""
+
+    field: str
+    value: str
+    label: str
+    count: int
+
 
 def parse_search_page(html: str) -> list[Listing]:
     """Parse all listing cards from a KiwiHouseSitters search page."""
     soup = BeautifulSoup(html, "html.parser")
     return [parse_listing_card(card) for card in soup.select(LISTING_CARD_SELECTOR)]
+
+
+def parse_search_filter_counts(html: str) -> tuple[SearchFilterCount, ...]:
+    """Parse result counts exposed beside search filter options."""
+    soup = BeautifulSoup(html, "html.parser")
+    counts: list[SearchFilterCount] = []
+
+    for link in soup.select("a[href]"):
+        label_text = _text_or_none(link.select_one(".label")) or _text_or_none(link)
+        if label_text is None:
+            continue
+
+        match = FILTER_COUNT_PATTERN.match(label_text)
+        if not match:
+            continue
+
+        query = parse_qs(urlparse(str(link.get("href", ""))).query)
+        field = _filter_count_field(query)
+        if field is None:
+            continue
+
+        value = query[field][0]
+        if not value:
+            continue
+
+        counts.append(
+            SearchFilterCount(
+                field=field,
+                value=value,
+                label=match.group("label").strip(),
+                count=int(match.group("count").replace(",", "")),
+            )
+        )
+
+    return tuple(counts)
+
+
+def parse_estimated_result_count(html: str) -> int | None:
+    """Estimate result count from mutually exclusive visible filter buckets."""
+    counts = parse_search_filter_counts(html)
+    for field in FILTER_COUNT_TOTAL_FIELDS:
+        field_counts = [option.count for option in counts if option.field == field]
+        if field_counts:
+            return sum(field_counts)
+    return None
+
+
+def search_page_has_cap_notice(html: str) -> bool:
+    """Return whether the page says the search has more hidden results."""
+    return SEARCH_CAP_NOTICE_TEXT in _normalize_text(
+        BeautifulSoup(html, "html.parser").get_text(" ", strip=True)
+    ).upper()
 
 
 def parse_listing_card(card: Tag) -> Listing:
@@ -353,3 +426,10 @@ def _parse_int(value: str) -> int:
         return int(value)
     except ValueError:
         return 0
+
+
+def _filter_count_field(query: dict[str, list[str]]) -> str | None:
+    for field in FILTER_COUNT_QUERY_FIELDS:
+        if query.get(field):
+            return field
+    return None

@@ -26,6 +26,8 @@ LISTING_PETS_SELECTOR = ".listing-pets li"
 NEXT_PAGE_SELECTOR = "div[id^='showmore'] a"
 STARTS_SOON_SELECTOR = ".urgent[title='Starts soon'], .urgent.tooltip"
 REPLY_RATING_IMAGE_SELECTOR = ".reply-rating img[alt]"
+SEARCH_CAP_NOTICE_TEXT = "AND THERE'S MORE"
+SEARCH_RESULT_CAP = 200
 
 DATE_ICON_TEXT = "date_range"
 DURATION_ICON_TEXT = "schedule"
@@ -88,6 +90,8 @@ ANIMAL_COUNT_FIELDS = (
     "reptiles_count",
     "other_pets_count",
 )
+
+SIT_LENGTH_IDS = ("60", "61", "62", "63", "64")
 
 DEFAULT_SITE_FILTERS = MappingProxyType(
     {

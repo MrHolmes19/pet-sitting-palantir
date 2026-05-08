@@ -17,6 +17,17 @@
     "subregion": {
       "type": "string",
       "description": "KiwiHouseSitters subregion filter. The site location UI allows one subregion at a time."
+    },
+    "sitlengths": {
+      "type": "string",
+      "enum": [
+        "60",
+        "61",
+        "62",
+        "63",
+        "64"
+      ],
+      "description": "KiwiHouseSitters sit length filter ID. Used as a fallback split when a location scope is still over the result cap."
     }
   },
   "examples": [
