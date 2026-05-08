@@ -1,12 +1,13 @@
 """Workflow for running every database-backed scrape scope that is due."""
 
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 from typing import Any
 
 from psycopg import Connection
 
 from pet_sitting_palantir.kiwihousesitters.constants import DEFAULT_MAX_PAGES
-from pet_sitting_palantir.storage import connect_database, read_due_scrape_scopes
+from pet_sitting_palantir.storage import ScrapeScope, connect_database, read_due_scrape_scopes
 from pet_sitting_palantir.workflows.scrape_and_store import (
     Scraper,
     StoredScrapeResult,
@@ -66,7 +67,7 @@ def run_due_scrape_scopes_with_connection(
     scraper: Scraper | None = None,
 ) -> DueScopeRunResult:
     """Run due scopes using an existing database connection."""
-    due_scopes = read_due_scrape_scopes(connection)
+    due_scopes = _select_broadest_due_scopes(read_due_scrape_scopes(connection))
     results: list[StoredScrapeResult] = []
     failures: list[DueScopeFailure] = []
 
@@ -106,3 +107,26 @@ def _runner_status(*, scopes_due: int, failures_count: int) -> str:
     if failures_count == scopes_due:
         return "failed"
     return "partial_failure"
+
+
+def _select_broadest_due_scopes(scopes: Sequence[ScrapeScope]) -> tuple[ScrapeScope, ...]:
+    """Remove due scopes covered by a broader due scope in the same invocation."""
+    return tuple(
+        scope
+        for scope in scopes
+        if not any(_scope_is_broader_than(other, scope) for other in scopes)
+    )
+
+
+def _scope_is_broader_than(parent: ScrapeScope, child: ScrapeScope) -> bool:
+    return _site_filter_covers(parent.site_filter, child.site_filter) and not _site_filter_covers(
+        child.site_filter,
+        parent.site_filter,
+    )
+
+
+def _site_filter_covers(
+    parent_filter: Mapping[str, Any],
+    child_filter: Mapping[str, Any],
+) -> bool:
+    return all(child_filter.get(key) == value for key, value in parent_filter.items())

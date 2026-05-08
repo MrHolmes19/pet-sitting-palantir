@@ -671,6 +671,77 @@ def test_run_due_scrape_scopes_runs_only_due_scopes(postgres_connection) -> None
 
 
 @pytest.mark.integration
+def test_run_due_scrape_scopes_runs_only_broadest_scope_on_fresh_database(
+    postgres_connection,
+) -> None:
+    seen_filters = []
+
+    def fake_scraper(site_filter, *, max_pages):
+        seen_filters.append(site_filter)
+        return ScrapeResult(
+            search_url="https://example.test/search",
+            pages_fetched=1,
+            listings=(_listing(external_id="fresh-baseline-listing"),),
+        )
+
+    result = run_due_scrape_scopes_with_connection(
+        postgres_connection,
+        max_pages=1,
+        scraper=fake_scraper,
+    )
+
+    assert result.status == "success"
+    assert result.scopes_due == 1
+    assert result.scopes_succeeded == 1
+    assert result.results[0].scope_name == "all_nz"
+    assert seen_filters == [{}]
+
+
+@pytest.mark.integration
+def test_run_due_scrape_scopes_skips_due_subregions_when_region_is_due(
+    postgres_connection,
+) -> None:
+    with postgres_connection.cursor() as cursor:
+        cursor.execute("update scrape_scopes set last_success_at = now()")
+        cursor.execute(
+            """
+            update scrape_scopes
+            set last_success_at = now() - interval '6 minutes'
+            where name = 'auckland_central'
+            """
+        )
+        cursor.execute(
+            """
+            update scrape_scopes
+            set last_success_at = now() - interval '61 minutes'
+            where name = 'auckland_region'
+            """
+        )
+
+    seen_filters = []
+
+    def fake_scraper(site_filter, *, max_pages):
+        seen_filters.append(site_filter)
+        return ScrapeResult(
+            search_url="https://example.test/search",
+            pages_fetched=1,
+            listings=(_listing(external_id="region-due-listing"),),
+        )
+
+    result = run_due_scrape_scopes_with_connection(
+        postgres_connection,
+        max_pages=1,
+        scraper=fake_scraper,
+    )
+
+    assert result.status == "success"
+    assert result.scopes_due == 1
+    assert result.scopes_succeeded == 1
+    assert result.results[0].scope_name == "auckland_region"
+    assert seen_filters == [{"state": "north-island", "region": "auckland"}]
+
+
+@pytest.mark.integration
 def test_scrape_and_store_scope_closes_failed_run(postgres_connection) -> None:
     def failing_scraper(site_filter, *, max_pages):
         raise RuntimeError("scrape failed")
