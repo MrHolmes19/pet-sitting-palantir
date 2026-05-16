@@ -74,25 +74,33 @@ Deliverables:
 - `sent_alerts` insert/update logic.
 - Duplicate prevention using `content_hash_at_alert`.
 
-## Phase 6 - GitHub Actions
+## Phase 6 - AWS Scheduled Production Run
 
-Goal: scheduled production run.
+Goal: alert-grade scheduled production run without relying on GitHub Actions
+cron.
 
 Deliverables:
 
-- Workflow that runs every 5 minutes.
-- Secrets wiring.
-- Concurrency configuration.
-- Remote database initialization command.
+- Lambda handler that calls the existing due-scope runner.
+- Lambda zip packaging for project code and dependencies.
+- AWS Lambda function in `ap-southeast-2`.
+- EventBridge Scheduler rule in `ap-southeast-2` using `rate(5 minutes)`.
+- Lambda reserved concurrency set to 1.
+- Lambda 512 MB memory, 5 to 10 minute timeout, and 30-day CloudWatch log
+  retention configured.
+- Lambda environment variables for `DATABASE_URL`, `TELEGRAM_BOT_TOKEN`, and
+  `TELEGRAM_CHAT_ID`.
+- GitHub Actions deployment workflow that updates Lambda on push to `main`.
 - Production run uses `--max-pages all`.
-- Clear logs for the due-scope runner.
+- Clear CloudWatch logs for the due-scope runner.
+- Old GitHub Actions `schedule` trigger remains disabled or removed.
 
 Expected secrets:
 
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY` or `DATABASE_URL`
+- `DATABASE_URL`
 - `TELEGRAM_BOT_TOKEN`
 - `TELEGRAM_CHAT_ID`
+- AWS deploy credentials or GitHub OIDC role configuration.
 
 ## Phase 7 - Hardening
 

@@ -31,7 +31,8 @@ Build a low-cost personal scraper and alerting system for KiwiHouseSitters listi
 
 - Architecture and stack: [architecture.md](docs/agent-context/architecture.md)
 - Scraper behavior and KiwiHouseSitters findings: [scraping-kiwihousesitters.md](docs/agent-context/scraping-kiwihousesitters.md)
-- Scope scheduling: [scheduling-and-scopes.md](docs/agent-context/scheduling-and-scopes.md)
+- Scheduler platform and deployment: [scheduling.md](docs/agent-context/scheduling.md)
+- Scrape scope cadence and coverage: [scopes.md](docs/agent-context/scopes.md)
 - Database schema: [data-model.md](docs/agent-context/data-model.md)
 - Data contracts: [docs/contracts](docs/contracts)
 - Listing lifecycle and safety rules: [lifecycle-and-safety.md](docs/agent-context/lifecycle-and-safety.md)
@@ -50,7 +51,7 @@ Build a low-cost personal scraper and alerting system for KiwiHouseSitters listi
   - `scripts/persist-local.sh auckland_central 1`
   - `scripts/psql-local.sh`
 - Runtime settings load from environment variables and a repo-root `.env` file. Keep production code environment-driven; local database URLs belong in `.env` or scripts, not hardcoded app logic.
-- Production database credentials belong only in gitignored `.env.production` or GitHub Actions secrets. Local scripts must not accidentally target production; production scripts need explicit warning/confirmation.
+- Production database credentials belong only in gitignored `.env.production`, Lambda environment variables, or GitHub Actions deployment secrets. Local scripts must not accidentally target production; production scripts need explicit warning/confirmation.
 - Do not move files to the staged section unless the user explicitly asks for staging. Leave edits in the working changes section for user review by default.
 
 ## Code Review
