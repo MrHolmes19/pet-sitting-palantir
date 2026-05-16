@@ -2,7 +2,8 @@
 
 ## Chosen Stack
 
-- Scheduler: GitHub Actions
+- Scheduler: AWS EventBridge Scheduler
+- Runtime: AWS Lambda in `ap-southeast-2`
 - Language: Python
 - Scraping: `requests` + BeautifulSoup
 - Database: Supabase/PostgreSQL
@@ -10,7 +11,11 @@
 
 ## Why This Stack
 
-GitHub Actions is enough for a low-cost scheduled personal scraper. Its schedule interval is limited, so the external workflow runs every 5 minutes and the script decides which scopes are due.
+AWS EventBridge Scheduler plus Lambda replaces GitHub Actions for production
+timekeeping. GitHub Actions scheduled workflows proved too unreliable for
+alert-grade 5-minute Auckland checks, while EventBridge Scheduler provides a
+managed recurring trigger and Lambda can run the existing Python due-scope
+workflow with a small handler.
 
 Supabase provides hosted PostgreSQL with a free tier suitable for early development. PostgreSQL also keeps the data model ready for later analytics.
 
@@ -20,7 +25,7 @@ The KiwiHouseSitters search page returns server-side rendered HTML. Filtered sea
 
 ## Runtime Flow
 
-1. GitHub Actions starts every 5 minutes.
+1. EventBridge Scheduler invokes Lambda every 5 minutes.
 2. Python script reads enabled `scrape_scopes`.
 3. For each scope, the script checks whether `now - last_success_at >= interval_minutes`.
 4. For each due scope, create a `scrape_runs` row with `status = running`.
@@ -49,40 +54,39 @@ Current module boundaries:
 - `workflows.run_due_scopes`: orchestration for database scopes whose interval is due.
 - `alerts`: local filter matching, Telegram sending, sent alert records.
 
-## GitHub Actions
+## Scheduler And Deployment
 
-External schedule:
+Production scheduling should run in AWS `ap-southeast-2`:
 
-```yaml
-on:
-  schedule:
-    - cron: "*/5 * * * *"
-```
+- EventBridge Scheduler expression: `rate(5 minutes)`.
+- Target: Lambda function.
+- Lambda command path: call the existing due-scope workflow equivalent to
+  `python -m pet_sitting_palantir --run-due --max-pages all --pretty`.
+- Lambda reserved concurrency: 1.
+- Lambda timeout: initially 5 to 10 minutes.
+- CloudWatch log retention: 30 days.
 
-Prevent overlapping runs:
+GitHub Actions should be used for CI and deployment only. A push to `main` can
+run tests, build a Lambda zip package, and update the Lambda function. Do not
+rely on GitHub Actions `schedule` for alert timing.
 
-```yaml
-concurrency:
-  group: pet-sitting-palantir-scrape
-  cancel-in-progress: false
-```
+The production run uses `--max-pages all` so each due scope follows pagination
+until the site has no next page. Secrets must not be printed to workflow or
+CloudWatch logs.
 
-The scheduled workflow uses the `DATABASE_URL` GitHub Actions secret. The value is written into a local `.env` file inside the ephemeral GitHub runner, then the app initializes the database schema if needed and seeds scrape scopes only when the scope table is empty. This preserves production scope edits made directly in the database.
+## Expected Runtime Secrets
 
-The production workflow uses `--max-pages all` so each due scope follows pagination until the site has no next page. The secret must not be printed to workflow logs.
-
-## Expected Secrets
-
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY` or `DATABASE_URL`
+- `DATABASE_URL`
 - `TELEGRAM_BOT_TOKEN`
 - `TELEGRAM_CHAT_ID`
 
-Prefer `DATABASE_URL` for server-side SQL workflows if direct PostgreSQL access is chosen. Prefer Supabase client credentials if using the Supabase API client.
+Prefer `DATABASE_URL` for the AWS Lambda production path. Use
+`SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` only if a future implementation
+switches to the Supabase API client.
 
 ## Operational Principles
 
-- One scheduled workflow, many database-configured scopes.
+- One scheduled invocation path, many database-configured scopes.
 - Store enough raw text to debug parsers, but do not overbuild snapshots in v1.
 - Treat parser failures as data quality risks, not as empty market signals.
 - Keep site load modest by using staggered scopes.

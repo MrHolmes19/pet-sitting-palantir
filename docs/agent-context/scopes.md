@@ -1,30 +1,11 @@
-# Scheduling And Scopes
+# Scopes
 
-## Core Scheduling Decision
+## Scope Cadence
 
-GitHub Actions can run the scraper workflow, but it is not reliable enough to be
-treated as an alert-grade 5-minute clock. The workflow accepted
-`*/5 * * * *`, but production observation showed scheduled runs arriving far less
-often than every 5 minutes. GitHub scheduled workflows are best-effort and can be
-delayed or dropped.
+The external scheduler should tick every 5 minutes. The app decides which scopes
+are due from database state.
 
-The GitHub Actions scraper workflow was manually disabled on 2026-05-08 while
-scope splitting and lifecycle safety fixes are being designed.
-
-If GitHub Actions is used again, keep one scheduled workflow and decide which
-scopes are due inside the script based on database state.
-
-This avoids hardcoded wall-clock schedules and tolerates:
-
-- GitHub Actions delays.
-- Failed runs.
-- Long-running runs.
-- Frequency changes made directly in the database.
-
-If fast Auckland alerts need dependable timing, use an external scheduler or an
-always-on worker instead of relying on GitHub Actions cron.
-
-## Initial Scope Cadence
+Initial scope cadence:
 
 | Scope | Interval | Purpose |
 | --- | ---: | --- |
@@ -53,9 +34,13 @@ run_due = last_success_at is null
           or now - last_success_at >= interval_minutes
 ```
 
-Use `last_success_at`, not `last_attempt_at`, so failed runs do not falsely advance the schedule.
+Use `last_success_at`, not `last_attempt_at`, so failed runs do not falsely
+advance the schedule.
 
-The implementation allows a small scheduler grace window before the exact interval boundary. GitHub Actions does not start on exact seconds, and without grace a fast 5-minute scope can miss a whole external scheduler tick because the previous successful run finished a few seconds after the previous tick.
+The implementation allows a small scheduler grace window before the exact
+interval boundary. External schedulers do not start on exact seconds, and without
+grace a fast 5-minute scope can miss a whole external scheduler tick because the
+previous successful run finished a few seconds after the previous tick.
 
 ## Overlapping Scope Selection
 
@@ -87,7 +72,9 @@ views in the same runner invocation.
 - `last_attempt_at`
 - `last_success_at`
 
-`missing_threshold_runs` is per scope because a fixed threshold has different real-world meanings at different frequencies. For example, 3 missing runs is 15 minutes for Auckland Central but 3 days for All New Zealand.
+`missing_threshold_runs` is per scope because a fixed threshold has different
+real-world meanings at different frequencies. For example, 3 missing runs is 15
+minutes for Auckland Central but 3 days for All New Zealand.
 
 Suggested initial values:
 
@@ -157,22 +144,11 @@ Examples:
 - `auckland_region` may mark Auckland Region listings missing.
 - `all_nz` may mark any New Zealand listing missing.
 
-The implementation needs a deterministic function for checking whether a listing is covered by a scope's `site_filter`.
+The implementation needs a deterministic function for checking whether a listing
+is covered by a scope's `site_filter`.
 
 Never mark listings missing from a scope's first successful baseline run. First
 runs establish observation state; they are not evidence that previously inserted
 overlapping listings disappeared.
 
 Never mark listings missing from incomplete or capped searches.
-
-## Concurrency
-
-Use GitHub Actions concurrency:
-
-```yaml
-concurrency:
-  group: pet-sitting-palantir-scrape
-  cancel-in-progress: false
-```
-
-This prevents overlapping runs from stepping on each other.

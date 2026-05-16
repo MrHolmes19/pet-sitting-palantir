@@ -9,10 +9,25 @@ long-term scheduler for fast alerts. It accepts cron syntax such as
 `*/5 * * * *`, but scheduled workflows are best-effort. Production observation
 showed the scraper running much less often than every 5 minutes.
 
-Decision: keep the GitHub Actions workflow disabled until scraper splitting and
-lifecycle safety are fixed. If GitHub Actions is re-enabled, treat it as a cheap
-opportunistic runner, not a dependable 5-minute alerting scheduler. For reliable
-fast Auckland alerts, use an external scheduler or always-on worker.
+Decision: use AWS EventBridge Scheduler plus AWS Lambda in `ap-southeast-2` as
+the production 5-minute scheduler/runtime. Keep GitHub Actions for CI and
+deployment only, not alert timing. The scheduled Lambda should run one generic
+due-scope invocation; scope cadence remains database-configured.
+
+Reasons other options were left out:
+
+- GitHub Actions scheduled workflows can be delayed or dropped and already failed
+  the 5-minute alerting requirement in production.
+- Google Cloud Free Tier VM is low-migration, but the always-free VM is limited
+  to selected US regions and requires server maintenance.
+- Google Cloud Scheduler has a usable free scheduler allowance, but still needs
+  a separate Python runtime target, so it is not simpler than AWS Lambda here.
+- Supabase scheduled Edge Functions would require a runtime migration away from
+  the current Python scraper.
+- Oracle Always Free compute can reclaim idle instances, which is a poor match
+  for a quiet periodic scraper.
+- PythonAnywhere, Heroku free dynos, and cheap VPS options do not meet the
+  free 5-minute cloud-runner requirement.
 
 ## Geographic Priority
 
@@ -31,6 +46,13 @@ Decision: build scraper quality, persistence, lifecycle handling, and alerts bef
 This is a personal project, so operational simplicity matters more than completeness.
 
 Decision: prefer cheap, boring infrastructure and small implementation phases. Avoid services or architecture that create maintenance work before the scraper has proven useful.
+
+Decision: keep the AWS scheduler/runtime inside the free tier by using the
+smallest practical Lambda/EventBridge shape: zip deployment, 512 MB Lambda,
+reserved concurrency 1, low Scheduler retries, 30-day CloudWatch log retention
+with concise logs, Lambda environment variables for v1 secrets, no VPC/NAT, no
+Secrets Manager, and no ECR/container image unless zip packaging fails. Detailed
+AWS operating decisions live in `docs/agent-context/scheduling.md`.
 
 ## Site Load
 
