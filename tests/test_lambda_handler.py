@@ -1,3 +1,5 @@
+from logging import ERROR
+
 import pytest
 
 from pet_sitting_palantir.lambda_handler import lambda_handler
@@ -38,8 +40,9 @@ def test_lambda_handler_imports_and_runs_due_scopes_with_all_pages(monkeypatch) 
     assert response["body"]["status"] == "success"
 
 
-def test_lambda_handler_raises_when_due_scopes_fail(monkeypatch) -> None:
+def test_lambda_handler_raises_when_due_scopes_fail(monkeypatch, caplog) -> None:
     captured_max_pages = []
+    caplog.set_level(ERROR, logger="pet_sitting_palantir.lambda_handler")
 
     def fake_run_due_scrape_scopes(*, max_pages):
         captured_max_pages.append(max_pages)
@@ -54,3 +57,5 @@ def test_lambda_handler_raises_when_due_scopes_fail(monkeypatch) -> None:
         lambda_handler({}, object())
 
     assert captured_max_pages == [None]
+    assert "lambda_due_scope_run_failed=" in caplog.text
+    assert '"scopes_failed": 1' in caplog.text

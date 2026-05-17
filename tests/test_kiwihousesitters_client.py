@@ -5,9 +5,18 @@ from pet_sitting_palantir.kiwihousesitters.client import KiwiHouseSittersClient
 
 
 class FakeResponse:
-    def __init__(self, *, status_code: int, text: str = "") -> None:
+    def __init__(
+        self,
+        *,
+        status_code: int,
+        text: str = "",
+        url: str = "https://example.test/search",
+        headers: dict[str, str] | None = None,
+    ) -> None:
         self.status_code = status_code
         self.text = text
+        self.url = url
+        self.headers = headers or {}
 
 
 class FakeSession:
@@ -32,6 +41,33 @@ def test_fetch_html_rejects_non_ok_status() -> None:
 
     with pytest.raises(requests.HTTPError, match="Unexpected status code: 204"):
         client.fetch_html("https://example.test/search")
+
+
+def test_fetch_html_error_includes_sanitized_response_details() -> None:
+    client = KiwiHouseSittersClient()
+    client._session = FakeSession(
+        FakeResponse(
+            status_code=403,
+            text="""
+            <html>
+              <head><title>Forbidden</title></head>
+              <body>Request blocked by security rules.</body>
+            </html>
+            """,
+            url="https://www.kiwihousesitters.co.nz/house-sitting-pet-sitting-jobs/search",
+            headers={"content-type": "text/html", "server": "cloudflare"},
+        )
+    )
+
+    with pytest.raises(requests.HTTPError) as error:
+        client.fetch_html("https://example.test/search")
+
+    message = str(error.value)
+    assert "Unexpected status code: 403" in message
+    assert "url=https://www.kiwihousesitters.co.nz/house-sitting-pet-sitting-jobs/search" in message
+    assert "content_type=text/html" in message
+    assert "server=cloudflare" in message
+    assert "body_snippet=<html> <head><title>Forbidden</title></head>" in message
 
 
 def test_fetch_search_pages_ignores_showmore_without_href() -> None:

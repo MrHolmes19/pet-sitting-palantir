@@ -19,6 +19,7 @@ def lambda_handler(event: Mapping[str, Any] | None, context: Any) -> dict[str, A
     logger.info("lambda_due_scope_run=%s", dumps(payload, sort_keys=True))
 
     if result.scopes_failed:
+        logger.error("lambda_due_scope_run_failed=%s", dumps(payload, sort_keys=True))
         raise RuntimeError(
             f"Due-scope Lambda run failed for {result.scopes_failed} of {result.scopes_due} scopes"
         )
