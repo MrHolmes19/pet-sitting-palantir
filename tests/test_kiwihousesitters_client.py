@@ -43,6 +43,16 @@ def test_fetch_html_rejects_non_ok_status() -> None:
         client.fetch_html("https://example.test/search")
 
 
+def test_client_uses_browser_like_default_headers() -> None:
+    client = KiwiHouseSittersClient(user_agent="custom-agent")
+
+    assert client._session.headers["User-Agent"] == "custom-agent"
+    assert client._session.headers["Accept"].startswith("text/html")
+    assert client._session.headers["Accept-Language"] == "en-NZ,en;q=0.9"
+    assert client._session.headers["Referer"] == "https://www.kiwihousesitters.co.nz"
+    assert client._session.headers["Upgrade-Insecure-Requests"] == "1"
+
+
 def test_fetch_html_error_includes_sanitized_response_details() -> None:
     client = KiwiHouseSittersClient()
     client._session = FakeSession(

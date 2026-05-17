@@ -11,6 +11,7 @@ from bs4 import BeautifulSoup
 
 from pet_sitting_palantir.kiwihousesitters.constants import (
     BASE_URL,
+    DEFAULT_REQUEST_HEADERS,
     DEFAULT_TIMEOUT_SECONDS,
     DEFAULT_USER_AGENT,
     HTTP_OK_STATUS,
@@ -42,7 +43,7 @@ class KiwiHouseSittersClient:
     ) -> None:
         self._timeout_seconds = timeout_seconds
         self._session = requests.Session()
-        self._session.headers.update({"User-Agent": user_agent})
+        self._session.headers.update({**DEFAULT_REQUEST_HEADERS, "User-Agent": user_agent})
 
     def fetch_html(self, url: str) -> str:
         """Fetch one HTML page and raise for non-success responses."""
