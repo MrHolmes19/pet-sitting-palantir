@@ -20,3 +20,4 @@ venv/
 
 # Local files
 .DS_Store
+build/

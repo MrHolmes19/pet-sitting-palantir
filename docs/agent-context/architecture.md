@@ -53,6 +53,7 @@ Current module boundaries:
 - `storage.lifecycle`: missing and expiration updates for persisted listings.
 - `workflows.run_due_scopes`: orchestration for database scopes whose interval is due.
 - `alerts`: local filter matching, Telegram sending, sent alert records.
+- `lambda_handler`: AWS Lambda entry point for EventBridge scheduled due-scope runs.
 
 ## Scheduler And Deployment
 
@@ -60,6 +61,7 @@ Production scheduling should run in AWS `ap-southeast-2`:
 
 - EventBridge Scheduler expression: `rate(5 minutes)`.
 - Target: Lambda function.
+- Lambda handler: `pet_sitting_palantir.lambda_handler.lambda_handler`.
 - Lambda command path: call the existing due-scope workflow equivalent to
   `python -m pet_sitting_palantir --run-due --max-pages all --pretty`.
 - Lambda reserved concurrency: 1.
