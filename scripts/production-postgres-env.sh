@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 PRODUCTION_ENV_FILE=".env.production"
-PRODUCTION_CONFIRMATION="I understand this connects to production"
+PRODUCTION_CONFIRMATION="I understand"
 
 load_production_database_url() {
   if [[ ! -f "${PRODUCTION_ENV_FILE}" ]]; then
