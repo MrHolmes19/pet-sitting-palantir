@@ -3,7 +3,7 @@ name = "pet-sitting-palantir"
 version = "0.1.0"
 description = "Personal KiwiHouseSitters scraper and alerting system for New Zealand pet sitting opportunities."
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = [
   "beautifulsoup4>=4.14.3",
   "psycopg[binary]>=3.3.4",
@@ -27,7 +27,7 @@ build-backend = "uv_build"
 
 [tool.ruff]
 line-length = 100
-target-version = "py312"
+target-version = "py314"
 src = ["src", "tests"]
 
 [tool.ruff.lint]

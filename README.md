@@ -17,9 +17,11 @@ Stack:
 - `requests` + BeautifulSoup for scraping.
 - Supabase/PostgreSQL for history, scopes, and alert filters.
 - Telegram Bot API for notifications.
-- GitHub Actions as workflow scheduler.
+- AWS EventBridge Scheduler + AWS Lambda for production scheduling.
 
-GitHub Actions will run on a 5 minute schedule, while the Python script decides which scrape scopes are due. This keeps one external scheduler and lets scope frequency live in the database.
+EventBridge invokes Lambda on a 5 minute schedule, while the Python code decides
+which scrape scopes are due. This keeps one external scheduler and lets scope
+frequency live in the database.
 
 Initial scope cadence:
 
@@ -50,7 +52,7 @@ Possible future analysis:
 3. Supabase schema and migrations.
 4. Upsert, lifecycle, and missing-listing handling.
 5. Telegram alert filters and sent alert tracking.
-6. GitHub Actions scheduler and secrets.
+6. AWS Lambda/EventBridge scheduler and secrets.
 7. Hardening with fixtures, retries, technical alerts, and clearer logs.
 
 ## Documentation
@@ -211,8 +213,17 @@ scripts/init-production-postgres.sh
 scripts/psql-production.sh
 ```
 
-Production scraping runs through GitHub Actions. The workflow is scheduled every
-5 minutes and can be run manually from the Actions tab.
+Production scraping should run through AWS EventBridge Scheduler invoking the
+Lambda handler at `pet_sitting_palantir.lambda_handler.lambda_handler`.
+GitHub Actions should stay limited to CI/deployment, not production timing.
+
+Build the Lambda zip package locally:
+
+```bash
+scripts/build-lambda-zip.sh
+```
+
+The script writes `build/lambda/pet-sitting-palantir-lambda.zip`.
 
 Useful inspection queries:
 

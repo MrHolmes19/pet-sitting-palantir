@@ -12,6 +12,22 @@ moving scheduler logic into AWS:
 python -m pet_sitting_palantir --run-due --max-pages all --pretty
 ```
 
+Handler path: `pet_sitting_palantir.lambda_handler.lambda_handler`.
+
+Build the Lambda zip package with:
+
+```bash
+scripts/build-lambda-zip.sh
+```
+
+The generated artifact is `build/lambda/pet-sitting-palantir-lambda.zip`. It is
+the uploadable Lambda deployment package: app code plus Python dependencies in
+the directory layout Lambda expects.
+
+Production scraping runs every 5 minutes from 06:00 through 23:55 in the
+New Zealand timezone. EventBridge Scheduler owns this active window; the
+application does not need separate overnight skip logic.
+
 GitHub Actions remains useful for CI and deployment, but not for production
 timekeeping.
 
@@ -105,7 +121,7 @@ EventBridge. Scope cadence stays in PostgreSQL and is evaluated by the app.
    due-scope workflow.
 2. Add packaging scripts or CI steps to build a Lambda-compatible zip with
    project code and dependencies.
-3. Create the Lambda function in `ap-southeast-2` with Python 3.12, 512 MB
+3. Create the Lambda function in `ap-southeast-2` with Python 3.14, 512 MB
    memory, a 5 to 10 minute timeout, reserved concurrency 1, environment
    variables, and 30-day CloudWatch log retention.
 4. Create an EventBridge Scheduler rule in `ap-southeast-2` with
