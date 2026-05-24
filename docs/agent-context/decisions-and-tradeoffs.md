@@ -9,15 +9,26 @@ long-term scheduler for fast alerts. It accepts cron syntax such as
 `*/5 * * * *`, but scheduled workflows are best-effort. Production observation
 showed the scraper running much less often than every 5 minutes.
 
-Decision: use AWS EventBridge Scheduler plus AWS Lambda in `ap-southeast-2` as
-the production 5-minute scheduler/runtime. Keep GitHub Actions for CI and
-deployment only, not alert timing. The scheduled Lambda should run one generic
-due-scope invocation; scope cadence remains database-configured.
+AWS EventBridge Scheduler plus AWS Lambda was implemented as the next option,
+but requests from the Lambda runtime were blocked by KiwiHouseSitters because
+they originated from an AWS cloud IP range.
+
+Decision: run the production workflow from an always-on home machine over its
+residential network connection. Keep GitHub Actions for CI only, not alert
+timing. The home-runner command is still to be implemented; it should run one
+generic due-scope invocation while scope cadence remains database-configured.
+
+Decision: enforce overnight quiet hours in application code from `00:00`
+inclusive to `06:00` exclusive in `Pacific/Auckland`. A local scheduler may
+also avoid overnight invocations, but scraping must remain protected if it is
+invoked during that window.
 
 Reasons other options were left out:
 
 - GitHub Actions scheduled workflows can be delayed or dropped and already failed
   the 5-minute alerting requirement in production.
+- AWS EventBridge Scheduler with Lambda cannot currently reach the site because
+  KiwiHouseSitters blocks the cloud IP range observed for those requests.
 - Google Cloud Free Tier VM is low-migration, but the always-free VM is limited
   to selected US regions and requires server maintenance.
 - Google Cloud Scheduler has a usable free scheduler allowance, but still needs
@@ -47,12 +58,9 @@ This is a personal project, so operational simplicity matters more than complete
 
 Decision: prefer cheap, boring infrastructure and small implementation phases. Avoid services or architecture that create maintenance work before the scraper has proven useful.
 
-Decision: keep the AWS scheduler/runtime inside the free tier by using the
-smallest practical Lambda/EventBridge shape: zip deployment, 512 MB Lambda,
-reserved concurrency 1, low Scheduler retries, 30-day CloudWatch log retention
-with concise logs, Lambda environment variables for v1 secrets, no VPC/NAT, no
-Secrets Manager, and no ECR/container image unless zip packaging fails. Detailed
-AWS operating decisions live in `docs/agent-context/scheduling.md`.
+Decision: use already-owned home hardware for the current free runtime path.
+The future activation command must provide non-overlapping executions, protected
+production configuration, and concise logs without adding paid hosting.
 
 ## Site Load
 

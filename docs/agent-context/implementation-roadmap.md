@@ -1,5 +1,13 @@
 # Implementation Roadmap
 
+## Current Next Step
+
+Quiet-hours protection is implemented in the scheduled/public due-scope entry
+point. On user request, the next local-runtime task is a single safe activation
+command for the always-on home machine, including non-overlap protection and
+protected production configuration loading. Telegram delivery remains an
+essential subsequent feature and is not implemented yet.
+
 ## Phase 1 - Local Scraper
 
 Goal: a pure Python scraper that receives a `site_filter` and returns normalized listing data.
@@ -74,33 +82,33 @@ Deliverables:
 - `sent_alerts` insert/update logic.
 - Duplicate prevention using `content_hash_at_alert`.
 
-## Phase 6 - AWS Scheduled Production Run
+## Phase 6 - Home-Hosted Scheduled Production Run
 
-Goal: alert-grade scheduled production run without relying on GitHub Actions
-cron.
+Goal: alert-grade scheduled production run from an always-on home machine over
+a residential connection, without relying on GitHub Actions cron or cloud IP
+ranges blocked by KiwiHouseSitters.
 
 Deliverables:
 
-- Lambda handler that calls the existing due-scope runner.
-- Lambda zip packaging for project code and dependencies.
-- AWS Lambda function in `ap-southeast-2`.
-- EventBridge Scheduler rule in `ap-southeast-2` using `rate(5 minutes)`.
-- Lambda reserved concurrency set to 1.
-- Lambda 512 MB memory, 5 to 10 minute timeout, and 30-day CloudWatch log
-  retention configured.
-- Lambda environment variables for `DATABASE_URL`, `TELEGRAM_BOT_TOKEN`, and
-  `TELEGRAM_CHAT_ID`.
-- GitHub Actions deployment workflow that updates Lambda on push to `main`.
-- Production run uses `--max-pages all`.
-- Clear CloudWatch logs for the due-scope runner.
+- Application-enforced quiet hours from `00:00` through `05:59` New Zealand time.
+- One safe activation command for the home machine that runs the existing
+  due-scope workflow.
+- Full-pagination production scraping with `--max-pages all`.
+- Non-overlap protection for scheduled invocations.
+- Protected loading of `DATABASE_URL` and future Telegram credentials.
+- Concise local operational logs.
+- Operating-system schedule ticking every 5 minutes during active operation.
 - Old GitHub Actions `schedule` trigger remains disabled or removed.
+
+Historical note: a Lambda handler and Lambda packaging were prepared when AWS
+EventBridge Scheduler plus Lambda was the intended runtime. That path was
+abandoned after KiwiHouseSitters blocked requests from the AWS cloud IP range.
 
 Expected secrets:
 
 - `DATABASE_URL`
 - `TELEGRAM_BOT_TOKEN`
 - `TELEGRAM_CHAT_ID`
-- AWS deploy credentials or GitHub OIDC role configuration.
 
 ## Phase 7 - Hardening
 

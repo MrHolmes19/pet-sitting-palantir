@@ -6,6 +6,12 @@ Read this file at the start of every task. Keep loaded context minimal: open onl
 
 Build a low-cost personal scraper and alerting system for KiwiHouseSitters listings in New Zealand, prioritizing fast Auckland alerts now and reliable historical data for future analytics.
 
+## Current Runtime Direction
+
+- The intended production runtime is an always-on home machine using a residential network connection. An unattended activation/scheduling command is not implemented yet.
+- The scheduled/public `run_due_scrape_scopes` workflow pauses scraping from `00:00` inclusive to `06:00` exclusive in `Pacific/Auckland`; preserve this application-level guard even if an external scheduler also avoids overnight invocations.
+- GitHub Actions cron was too unreliable for 5-minute alerts. AWS Lambda with EventBridge Scheduler was attempted next, but KiwiHouseSitters blocks requests from the AWS cloud IP range used by that runtime. Keep existing AWS artifacts only as historical/fallback code unless this restriction changes.
+
 ## General Rules
 
 - Keep this file generic. Put topic-specific decisions in the relevant context file.
@@ -51,7 +57,7 @@ Build a low-cost personal scraper and alerting system for KiwiHouseSitters listi
   - `scripts/persist-local.sh auckland_central 1`
   - `scripts/psql-local.sh`
 - Runtime settings load from environment variables and a repo-root `.env` file. Keep production code environment-driven; local database URLs belong in `.env` or scripts, not hardcoded app logic.
-- Production database credentials belong only in gitignored `.env.production`, Lambda environment variables, or GitHub Actions deployment secrets. Local scripts must not accidentally target production; production scripts need explicit warning/confirmation.
+- Production database credentials belong only in gitignored `.env.production` or a future protected home-runner environment. Development scripts must not accidentally target production; interactive production maintenance scripts need explicit warning/confirmation.
 - Production failures must be logged at `ERROR` level with concise, non-secret context before raising or returning failure.
 - Do not move files to the staged section unless the user explicitly asks for staging. Leave edits in the working changes section for user review by default.
 - Do not unstage files unless the user explicitly asks for unstaging. The user may be managing the index manually to compare staged and unstaged diffs.

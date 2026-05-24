@@ -2,8 +2,10 @@
 
 ## Scope Cadence
 
-The external scheduler should tick every 5 minutes. The app decides which scopes
-are due from database state.
+During active hours, the external scheduler should tick every 5 minutes. The
+scheduled/public `run_due_scrape_scopes` entry point decides which scopes are
+due from database state and independently suppresses scheduled due-scope runs
+from `00:00` inclusive to `06:00` exclusive in `Pacific/Auckland`.
 
 Initial scope cadence:
 
