@@ -8,9 +8,8 @@ Build a low-cost personal scraper and alerting system for KiwiHouseSitters listi
 
 ## Current Runtime Direction
 
-- The intended production runtime is an always-on home machine using a residential network connection. An unattended activation/scheduling command is not implemented yet.
-- The scheduled/public `run_due_scrape_scopes` workflow pauses scraping from `00:00` inclusive to `06:00` exclusive in `Pacific/Auckland`; preserve this application-level guard even if an external scheduler also avoids overnight invocations.
-- GitHub Actions cron was too unreliable for 5-minute alerts. AWS Lambda with EventBridge Scheduler was attempted next, but KiwiHouseSitters blocks requests from the AWS cloud IP range used by that runtime. Keep existing AWS artifacts only as historical/fallback code unless this restriction changes.
+- Production is moving to an always-on home machine. The unattended activation command is not implemented yet.
+- Production due-scope runs have application-enforced quiet hours. Read [scheduling.md](docs/agent-context/scheduling.md) before changing runtime, scheduling, or deployment behavior.
 
 ## General Rules
 

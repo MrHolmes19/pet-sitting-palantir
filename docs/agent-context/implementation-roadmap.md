@@ -1,13 +1,5 @@
 # Implementation Roadmap
 
-## Current Next Step
-
-Quiet-hours protection is implemented in the scheduled/public due-scope entry
-point. On user request, the next local-runtime task is a single safe activation
-command for the always-on home machine, including non-overlap protection and
-protected production configuration loading. Telegram delivery remains an
-essential subsequent feature and is not implemented yet.
-
 ## Phase 1 - Local Scraper
 
 Goal: a pure Python scraper that receives a `site_filter` and returns normalized listing data.
@@ -84,13 +76,14 @@ Deliverables:
 
 ## Phase 6 - Home-Hosted Scheduled Production Run
 
-Goal: alert-grade scheduled production run from an always-on home machine over
-a residential connection, without relying on GitHub Actions cron or cloud IP
-ranges blocked by KiwiHouseSitters.
+Goal: alert-grade scheduled production run from an always-on home machine.
+
+Completed:
+
+- Application-enforced quiet hours for ongoing production due-scope runs.
 
 Deliverables:
 
-- Application-enforced quiet hours from `00:00` through `05:59` New Zealand time.
 - One safe activation command for the home machine that runs the existing
   due-scope workflow.
 - Full-pagination production scraping with `--max-pages all`.
@@ -99,16 +92,6 @@ Deliverables:
 - Concise local operational logs.
 - Operating-system schedule ticking every 5 minutes during active operation.
 - Old GitHub Actions `schedule` trigger remains disabled or removed.
-
-Historical note: a Lambda handler and Lambda packaging were prepared when AWS
-EventBridge Scheduler plus Lambda was the intended runtime. That path was
-abandoned after KiwiHouseSitters blocked requests from the AWS cloud IP range.
-
-Expected secrets:
-
-- `DATABASE_URL`
-- `TELEGRAM_BOT_TOKEN`
-- `TELEGRAM_CHAT_ID`
 
 ## Phase 7 - Hardening
 

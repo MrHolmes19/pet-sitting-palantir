@@ -17,17 +17,10 @@ Stack:
 - `requests` + BeautifulSoup for scraping.
 - Supabase/PostgreSQL for history, scopes, and alert filters.
 - Telegram Bot API for notifications.
-- An always-on home machine over a residential connection for production scheduling.
+- An always-on home machine for planned production scheduling.
 
-The intended home scheduler will invoke the due-scope workflow regularly, while
-the Python code decides which scrape scopes are due. Application code already
-suppresses due-scope scraping from `00:00` inclusive to `06:00` exclusive in
-`Pacific/Auckland`, returning `status = "quiet_hours"` during that period.
-
-GitHub Actions cron proved too unreliable for the alert cadence. AWS Lambda with
-EventBridge Scheduler was subsequently prepared, but KiwiHouseSitters blocked
-requests from the AWS cloud IP range used by that runtime. The safe unattended
-home activation command is the next deployment implementation task.
+The scheduler invokes one due-scope workflow; the Python code decides which
+configured scopes need to run.
 
 Initial scope cadence:
 
@@ -129,8 +122,8 @@ Use `all` to follow pagination until the site has no next page:
 scripts/run-due-local.sh all
 ```
 
-Due-scope commands do no scrape work from midnight through 05:59 New Zealand
-time, even if invoked manually or by a future scheduler.
+The `--run-due` workflow used for ongoing production scraping pauses from
+midnight through 05:59 New Zealand time.
 
 If `DATABASE_URL` is set in a local `.env` file, you can also run:
 
@@ -223,14 +216,9 @@ scripts/psql-production.sh
 ```
 
 Production scraping is intended to run on an always-on home machine using its
-residential network connection. A safe unattended activation command is not yet
+residential network connection. The unattended production command is not yet
 implemented; the existing `*-local.sh` scripts are development helpers that
 always target local Docker PostgreSQL.
-
-The repository still contains a Lambda handler and packaging script from the
-abandoned AWS Lambda/EventBridge attempt. They are retained as historical
-fallback material, not as the current deployment instructions, because
-KiwiHouseSitters blocked requests from that cloud IP range.
 
 Useful inspection queries:
 
