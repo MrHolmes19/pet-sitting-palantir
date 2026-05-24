@@ -2,7 +2,9 @@
 
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
+from datetime import datetime, time
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from psycopg import Connection
 
@@ -13,6 +15,10 @@ from pet_sitting_palantir.workflows.scrape_and_store import (
     StoredScrapeResult,
     scrape_and_store_scope_with_connection,
 )
+
+NEW_ZEALAND_TIME_ZONE = ZoneInfo("Pacific/Auckland")
+QUIET_HOURS_START = time(hour=0)
+QUIET_HOURS_END = time(hour=6)
 
 
 @dataclass(frozen=True)
@@ -47,8 +53,19 @@ def run_due_scrape_scopes(
     max_pages: int | None = DEFAULT_MAX_PAGES,
     database_url: str | None = None,
     scraper: Scraper | None = None,
+    current_time: datetime | None = None,
 ) -> DueScopeRunResult:
     """Run every enabled scrape scope that is currently due."""
+    if _is_quiet_hours(current_time):
+        return DueScopeRunResult(
+            status="quiet_hours",
+            scopes_due=0,
+            scopes_succeeded=0,
+            scopes_failed=0,
+            results=(),
+            failures=(),
+        )
+
     connection = connect_database(database_url)
     try:
         return run_due_scrape_scopes_with_connection(
@@ -107,6 +124,16 @@ def _runner_status(*, scopes_due: int, failures_count: int) -> str:
     if failures_count == scopes_due:
         return "failed"
     return "partial_failure"
+
+
+def _is_quiet_hours(current_time: datetime | None = None) -> bool:
+    """Return whether scraping is paused for the overnight New Zealand window."""
+    instant = current_time or datetime.now(tz=NEW_ZEALAND_TIME_ZONE)
+    if instant.tzinfo is None:
+        raise ValueError("current_time must include a timezone")
+
+    local_time = instant.astimezone(NEW_ZEALAND_TIME_ZONE).time()
+    return QUIET_HOURS_START <= local_time < QUIET_HOURS_END
 
 
 def _select_broadest_due_scopes(scopes: Sequence[ScrapeScope]) -> tuple[ScrapeScope, ...]:

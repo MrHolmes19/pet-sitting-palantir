@@ -17,11 +17,10 @@ Stack:
 - `requests` + BeautifulSoup for scraping.
 - Supabase/PostgreSQL for history, scopes, and alert filters.
 - Telegram Bot API for notifications.
-- AWS EventBridge Scheduler + AWS Lambda for production scheduling.
+- An always-on home machine for planned production scheduling.
 
-EventBridge invokes Lambda on a 5 minute schedule, while the Python code decides
-which scrape scopes are due. This keeps one external scheduler and lets scope
-frequency live in the database.
+The scheduler invokes one due-scope workflow; the Python code decides which
+configured scopes need to run.
 
 Initial scope cadence:
 
@@ -52,7 +51,7 @@ Possible future analysis:
 3. Supabase schema and migrations.
 4. Upsert, lifecycle, and missing-listing handling.
 5. Telegram alert filters and sent alert tracking.
-6. AWS Lambda/EventBridge scheduler and secrets.
+6. Home-hosted scheduled runner, quiet hours, locking, and secrets.
 7. Hardening with fixtures, retries, technical alerts, and clearer logs.
 
 ## Documentation
@@ -122,6 +121,9 @@ Use `all` to follow pagination until the site has no next page:
 ```bash
 scripts/run-due-local.sh all
 ```
+
+The `--run-due` workflow used for ongoing production scraping pauses from
+midnight through 05:59 New Zealand time.
 
 If `DATABASE_URL` is set in a local `.env` file, you can also run:
 
@@ -213,17 +215,10 @@ scripts/init-production-postgres.sh
 scripts/psql-production.sh
 ```
 
-Production scraping should run through AWS EventBridge Scheduler invoking the
-Lambda handler at `pet_sitting_palantir.lambda_handler.lambda_handler`.
-GitHub Actions should stay limited to CI/deployment, not production timing.
-
-Build the Lambda zip package locally:
-
-```bash
-scripts/build-lambda-zip.sh
-```
-
-The script writes `build/lambda/pet-sitting-palantir-lambda.zip`.
+Production scraping is intended to run on an always-on home machine using its
+residential network connection. The unattended production command is not yet
+implemented; the existing `*-local.sh` scripts are development helpers that
+always target local Docker PostgreSQL.
 
 Useful inspection queries:
 

@@ -6,6 +6,11 @@ Read this file at the start of every task. Keep loaded context minimal: open onl
 
 Build a low-cost personal scraper and alerting system for KiwiHouseSitters listings in New Zealand, prioritizing fast Auckland alerts now and reliable historical data for future analytics.
 
+## Current Runtime Direction
+
+- Production is moving to an always-on home machine. The unattended activation command is not implemented yet.
+- Production due-scope runs have application-enforced quiet hours. Read [scheduling.md](docs/agent-context/scheduling.md) before changing runtime, scheduling, or deployment behavior.
+
 ## General Rules
 
 - Keep this file generic. Put topic-specific decisions in the relevant context file.
@@ -51,7 +56,7 @@ Build a low-cost personal scraper and alerting system for KiwiHouseSitters listi
   - `scripts/persist-local.sh auckland_central 1`
   - `scripts/psql-local.sh`
 - Runtime settings load from environment variables and a repo-root `.env` file. Keep production code environment-driven; local database URLs belong in `.env` or scripts, not hardcoded app logic.
-- Production database credentials belong only in gitignored `.env.production`, Lambda environment variables, or GitHub Actions deployment secrets. Local scripts must not accidentally target production; production scripts need explicit warning/confirmation.
+- Production database credentials belong only in gitignored `.env.production` or a future protected home-runner environment. Development scripts must not accidentally target production; interactive production maintenance scripts need explicit warning/confirmation.
 - Production failures must be logged at `ERROR` level with concise, non-secret context before raising or returning failure.
 - Do not move files to the staged section unless the user explicitly asks for staging. Leave edits in the working changes section for user review by default.
 - Do not unstage files unless the user explicitly asks for unstaging. The user may be managing the index manually to compare staged and unstaged diffs.
