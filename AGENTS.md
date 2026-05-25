@@ -8,7 +8,7 @@ Build a low-cost personal scraper and alerting system for KiwiHouseSitters listi
 
 ## Current Runtime Direction
 
-- Production is moving to an always-on home machine. The unattended activation command is not implemented yet.
+- Production runs are intended for an always-on home machine and are started with `scripts/run-production.sh`.
 - Production due-scope runs have application-enforced quiet hours. Read [scheduling.md](docs/agent-context/scheduling.md) before changing runtime, scheduling, or deployment behavior.
 
 ## General Rules

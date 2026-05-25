@@ -2,7 +2,7 @@
 
 ## Chosen Stack
 
-- Scheduler/runtime: home-hosted Python process, not yet activated for unattended runs
+- Scheduler/runtime: restartable home-hosted Python supervisor
 - Language: Python
 - Scraping: `requests` + BeautifulSoup
 - Database: Supabase/PostgreSQL

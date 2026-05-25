@@ -44,13 +44,13 @@ AUCKLAND_SUBREGION_ALIASES = {
 }
 
 FILTER_COUNT_QUERY_FIELDS = (
-    "subregion",
-    "region",
     "sitlengths",
     "housetype",
+    "subregion",
+    "region",
     "state",
 )
-FILTER_COUNT_TOTAL_FIELDS = ("sitlengths", "housetype")
+FILTER_COUNT_TOTAL_FIELDS = ("housetype",)
 FILTER_COUNT_PATTERN = re.compile(r"^(?P<label>.+?)\s*\((?P<count>[\d,]+)\)\s*$")
 
 
@@ -106,7 +106,7 @@ def parse_search_filter_counts(html: str) -> tuple[SearchFilterCount, ...]:
 
 
 def parse_estimated_result_count(html: str) -> int | None:
-    """Estimate result count from mutually exclusive visible filter buckets."""
+    """Estimate result count from mutually exclusive visible house-type buckets."""
     counts = parse_search_filter_counts(html)
     for field in FILTER_COUNT_TOTAL_FIELDS:
         field_counts = [option.count for option in counts if option.field == field]

@@ -17,7 +17,7 @@ Stack:
 - `requests` + BeautifulSoup for scraping.
 - Supabase/PostgreSQL for history, scopes, and alert filters.
 - Telegram Bot API for notifications.
-- An always-on home machine for planned production scheduling.
+- An always-on home machine for production scheduling.
 
 The scheduler invokes one due-scope workflow; the Python code decides which
 configured scopes need to run.
@@ -207,8 +207,8 @@ connection string in a gitignored `.env.production` file:
 cp .env.production.example .env.production
 ```
 
-Use the production scripts only when you mean it. They print a production warning
-and require a typed confirmation before connecting:
+Use the interactive production maintenance scripts only when you mean it. They
+print a production warning and require a typed confirmation before connecting:
 
 ```bash
 scripts/init-production-postgres.sh
@@ -216,9 +216,22 @@ scripts/psql-production.sh
 ```
 
 Production scraping is intended to run on an always-on home machine using its
-residential network connection. The unattended production command is not yet
-implemented; the existing `*-local.sh` scripts are development helpers that
-always target local Docker PostgreSQL.
+residential network connection. After configuring `.env.production`, start the
+restartable production runner with:
+
+```bash
+scripts/run-production.sh
+```
+
+It runs due scopes immediately and then checks again every 5 minutes. Stop it
+with `Ctrl+C`; restarting the same command resumes from successful run
+timestamps stored in PostgreSQL. If connectivity temporarily fails, the runner
+stays alive and retries on a later tick. The existing `*-local.sh` scripts remain
+development helpers that always target local Docker PostgreSQL.
+
+Code-owned runtime values such as scraper request pacing, quiet hours, and the
+home-runner tick interval are centralized in
+`src/pet_sitting_palantir/settings.py`. Scope cadences remain database-configured.
 
 Useful inspection queries:
 

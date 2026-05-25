@@ -1,5 +1,6 @@
 from pet_sitting_palantir.config import load_settings
 from pet_sitting_palantir.main import main
+from pet_sitting_palantir.workflows.home_runner import RunnerAlreadyActiveError
 
 
 def test_main_returns_success(monkeypatch, capsys) -> None:
@@ -188,6 +189,36 @@ def test_main_returns_failure_when_run_due_has_failures(monkeypatch, capsys) -> 
 
     assert main() == 1
     assert '"status": "failed"' in capsys.readouterr().out
+
+
+def test_main_supports_continuous_home_runner_with_all_pages(monkeypatch) -> None:
+    captured_max_pages = []
+
+    monkeypatch.setattr(
+        "pet_sitting_palantir.main.run_home_runner",
+        lambda *, max_pages: captured_max_pages.append(max_pages),
+    )
+    monkeypatch.setattr(
+        "sys.argv",
+        ["pet-sitting-palantir", "--run-continuously", "--max-pages", "all"],
+    )
+
+    assert main() == 0
+    assert captured_max_pages == [None]
+
+
+def test_main_reports_an_already_active_continuous_runner(monkeypatch, capsys) -> None:
+    def fail_to_acquire_lock(*, max_pages):
+        raise RunnerAlreadyActiveError("Production runner is already active")
+
+    monkeypatch.setattr(
+        "pet_sitting_palantir.main.run_home_runner",
+        fail_to_acquire_lock,
+    )
+    monkeypatch.setattr("sys.argv", ["pet-sitting-palantir", "--run-continuously"])
+
+    assert main() == 1
+    assert "Production runner is already active" in capsys.readouterr().err
 
 
 def test_main_supports_init_db_output(monkeypatch, capsys) -> None:

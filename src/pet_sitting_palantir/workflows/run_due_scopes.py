@@ -2,23 +2,23 @@
 
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
-from datetime import datetime, time
+from datetime import datetime
 from typing import Any
-from zoneinfo import ZoneInfo
 
 from psycopg import Connection
 
 from pet_sitting_palantir.kiwihousesitters.constants import DEFAULT_MAX_PAGES
+from pet_sitting_palantir.settings import (
+    NEW_ZEALAND_TIME_ZONE,
+    QUIET_HOURS_END,
+    QUIET_HOURS_START,
+)
 from pet_sitting_palantir.storage import ScrapeScope, connect_database, read_due_scrape_scopes
 from pet_sitting_palantir.workflows.scrape_and_store import (
     Scraper,
     StoredScrapeResult,
     scrape_and_store_scope_with_connection,
 )
-
-NEW_ZEALAND_TIME_ZONE = ZoneInfo("Pacific/Auckland")
-QUIET_HOURS_START = time(hour=0)
-QUIET_HOURS_END = time(hour=6)
 
 
 @dataclass(frozen=True)

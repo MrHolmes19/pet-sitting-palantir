@@ -1,7 +1,9 @@
 """Command-line entry point for the scraper application."""
 
+import sys
 from argparse import ArgumentParser, ArgumentTypeError, Namespace
 from json import dumps
+from logging import INFO, basicConfig
 
 from pet_sitting_palantir.kiwihousesitters.constants import (
     DEFAULT_MAX_PAGES,
@@ -10,6 +12,7 @@ from pet_sitting_palantir.kiwihousesitters.constants import (
 )
 from pet_sitting_palantir.kiwihousesitters.scraper import scrape_scope
 from pet_sitting_palantir.storage import connect_database, initialize_database
+from pet_sitting_palantir.workflows.home_runner import RunnerAlreadyActiveError, run_home_runner
 from pet_sitting_palantir.workflows.run_due_scopes import run_due_scrape_scopes
 from pet_sitting_palantir.workflows.scrape_and_store import scrape_and_store_scope
 
@@ -42,6 +45,15 @@ def main() -> int:
         result = run_due_scrape_scopes(max_pages=args.max_pages)
         print(dumps(result.to_dict(), indent=2 if args.pretty else None, sort_keys=True))
         return 1 if result.scopes_failed else 0
+
+    if args.run_continuously:
+        basicConfig(level=INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+        try:
+            run_home_runner(max_pages=args.max_pages)
+        except RunnerAlreadyActiveError as error:
+            print(str(error), file=sys.stderr)
+            return 1
+        return 0
 
     if args.persist:
         result = scrape_and_store_scope(scope_name=args.scope, max_pages=args.max_pages)
@@ -99,6 +111,11 @@ def _parse_args() -> Namespace:
         "--run-due",
         action="store_true",
         help="Store every enabled database scrape scope whose interval is due.",
+    )
+    parser.add_argument(
+        "--run-continuously",
+        action="store_true",
+        help="Continuously run due database scopes for the home-hosted production runtime.",
     )
     parser.add_argument(
         "--init-db",

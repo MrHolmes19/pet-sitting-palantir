@@ -11,7 +11,7 @@ https://www.kiwihousesitters.co.nz
 Search URL:
 
 ```text
-https://www.kiwihousesitters.co.nz/house-sitting-pet-sitting-jobs/search
+https://www.kiwihousesitters.co.nz/house-sitting-pet-sitting-jobs/search?view=list
 ```
 
 ## Site Behavior Observed
@@ -26,9 +26,18 @@ Do not use Playwright for v1 unless plain HTML scraping stops working.
 Filtered searches use a form POST to the same search URL, not query parameters. The
 site can be queried with a `requests.Session`:
 
-1. `GET /house-sitting-pet-sitting-jobs/search` to establish the session and fetch the base form.
-2. `POST /house-sitting-pet-sitting-jobs/search` with form fields such as `state`, `region`, and `subregion`.
-3. Parse the returned HTML like any other search page.
+1. `GET /house-sitting-pet-sitting-jobs/search?view=list` to establish the
+   server-side search context for a filtered request.
+2. `POST /house-sitting-pet-sitting-jobs/search?view=list` with complete form
+   fields such as `state`, `region`, and `subregion`. Repeat the GET/POST
+   pair for each new filtered leaf; attempting to reuse a prior search
+   bootstrap produced inconsistent capped-result behavior.
+3. Paginate each filtered search immediately before issuing the next filtered
+   POST. Requests to a `showmore` link must include
+   `X-Requested-With: XMLHttpRequest` and the search-page referrer. Without the
+   AJAX request context, a filtered Auckland Region page 1 was followed by
+   unfiltered nationwide results on page 2.
+4. Parse each returned HTML response like any other search page.
 
 Observed Auckland Central payload:
 
@@ -56,7 +65,9 @@ Observed pattern:
 1. Fetch the initial search URL for the scope.
 2. Parse listing cards.
 3. Find the link inside `div[id^='showmore']`.
-4. Follow its `href`, which includes generated parameters such as `searchid` and `page=2`.
+4. Follow its `href` as an AJAX request, including `X-Requested-With:
+   XMLHttpRequest` and the search-page referrer. The URL includes generated
+   parameters such as `searchid` and `page=2`.
 5. Repeat until no `showmore` div exists.
 
 Pseudo-flow:
@@ -84,6 +95,10 @@ Important: do not try to create `searchid` manually. Start from the first page e
 
 Production scheduled scraping should use `--max-pages all` so each due scope follows pagination until the site stops exposing a next page. Local runs may pass a numeric `--max-pages` to limit site load while testing.
 
+The client applies the minimum request delay defined in
+`src/pet_sitting_palantir/settings.py`. The selected production value is `0.5`
+seconds between requests; change it deliberately only after an end-to-end run.
+
 ## Search Result Cap And Splitting
 
 KiwiHouseSitters appears to cap broad searches at about 200 exposed listings.
@@ -91,9 +106,22 @@ The site can show an "AND THERE'S MORE..." message instead of exposing all
 results. A capped search is incomplete and must not be used for missing-listing
 lifecycle inference.
 
-Before scraping a broad scope fully, parse the first page filter counts to
-estimate whether the result set is over the cap. Use `200` as the cap threshold.
-If the count is greater than 200, split before collecting listing pages.
+Before scraping a broad scope fully, parse the first page house-type counts to
+estimate whether the result set is over the cap. House types are mutually
+exclusive and their sum can be treated as the visible listing total. Use `200`
+as the cap threshold. If that count is greater than 200, split before collecting
+listing pages.
+If neither count data nor the explicit capped-results message is present,
+paginate the requested scope directly; absence of count metadata is not evidence
+that another split is required.
+
+Do not sum sit-length counts to estimate result size: those categories do not
+reliably partition the results. Use mutually exclusive house-type counts for
+the first-page estimate, and retain sit length only as a final split dimension
+when a subregion is actually capped.
+
+When a non-terminal leaf genuinely reveals an explicit cap notice during
+pagination, discard its partial results and retry through the next split level.
 
 Preferred split order:
 
@@ -106,11 +134,21 @@ Location hierarchy:
   North Island and South Island child searches.
 - Island searches over 200 should expand into region child searches.
 - Region searches over 200 should expand into subregion child searches.
-- Subregion searches are expected to stay below the cap in normal operation.
+- Subregion searches over 200 should expand into all five sit-length child
+  searches.
 
-Sit length is the fallback split because it tends to distribute listings better
-than house type. House type is not a preferred primary split because most
-listings are usually `House`, so it often leaves the largest bucket capped.
+Sit length is the fallback split dimension because it tends to distribute
+listings better than house type. Its visible counts must not be summed as a
+total. House type is useful to estimate the complete result count, but is not a
+preferred split because most listings are usually `House`, so it often leaves
+the largest bucket capped.
+
+If one individual subregion-plus-sit-length child still exceeds the cap, the
+current v1 adapter has no further complete partition available. Fail that scope
+instead of persisting an incomplete result or applying missing-listing logic.
+Once a sit-length filter is selected, do not apply the aggregate filter-count
+estimate again: the returned page may still expose totals for all sit lengths.
+Only an explicit cap notice makes that terminal leaf incomplete.
 
 Known sit length IDs:
 

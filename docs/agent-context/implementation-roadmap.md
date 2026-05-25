@@ -81,17 +81,15 @@ Goal: alert-grade scheduled production run from an always-on home machine.
 Completed:
 
 - Application-enforced quiet hours for ongoing production due-scope runs.
+- One safe restartable home-runner command with full pagination, single-instance
+  locking, and retry-on-next-tick failure handling.
+- Protected loading of `DATABASE_URL` from the production environment file.
+- Concise local operational logs.
 
 Deliverables:
 
-- One safe activation command for the home machine that runs the existing
-  due-scope workflow.
-- Full-pagination production scraping with `--max-pages all`.
-- Non-overlap protection for scheduled invocations.
-- Protected loading of `DATABASE_URL` and future Telegram credentials.
-- Concise local operational logs.
-- Operating-system schedule ticking every 5 minutes during active operation.
-- Old GitHub Actions `schedule` trigger remains disabled or removed.
+- Extend production environment configuration with Telegram credentials when
+  alert delivery is implemented.
 
 ## Phase 7 - Hardening
 

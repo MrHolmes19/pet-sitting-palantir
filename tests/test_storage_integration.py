@@ -763,6 +763,28 @@ def test_run_due_scrape_scopes_runs_only_broadest_scope_on_fresh_database(
     assert result.results[0].scope_name == "all_nz"
     assert seen_filters == [{}]
 
+    with postgres_connection.cursor() as cursor:
+        cursor.execute(
+            """
+            select
+              name,
+              last_attempt_at is not null as attempted,
+              last_success_at is not null as fresh
+            from scrape_scopes
+            order by name
+            """
+        )
+        scope_state = cursor.fetchall()
+
+    assert scope_state == [
+        {"name": "all_nz", "attempted": True, "fresh": True},
+        {"name": "auckland_central", "attempted": False, "fresh": True},
+        {"name": "auckland_region", "attempted": False, "fresh": True},
+        {"name": "north_island", "attempted": False, "fresh": True},
+        {"name": "north_shore_city", "attempted": False, "fresh": True},
+    ]
+    assert read_due_scrape_scopes(postgres_connection) == []
+
 
 @pytest.mark.integration
 def test_run_due_scrape_scopes_skips_due_subregions_when_region_is_due(
@@ -809,6 +831,55 @@ def test_run_due_scrape_scopes_skips_due_subregions_when_region_is_due(
 
 
 @pytest.mark.integration
+def test_run_due_scrape_scopes_catches_up_region_without_rescheduling_island(
+    postgres_connection,
+) -> None:
+    with postgres_connection.cursor() as cursor:
+        cursor.execute("update scrape_scopes set last_success_at = now()")
+        cursor.execute(
+            """
+            update scrape_scopes
+            set last_success_at = now() - interval '62 minutes'
+            where name in ('auckland_central', 'north_shore_city', 'auckland_region')
+            """
+        )
+        cursor.execute(
+            """
+            update scrape_scopes
+            set last_success_at = now() - interval '11 hours'
+            where name = 'north_island'
+            returning last_success_at
+            """
+        )
+        island_last_success_at = cursor.fetchone()["last_success_at"]
+
+    def fake_scraper(site_filter, *, max_pages):
+        assert site_filter == {"state": "north-island", "region": "auckland"}
+        return ScrapeResult(
+            search_url="https://example.test/search",
+            pages_fetched=1,
+            listings=(_listing(external_id="outage-catch-up-listing"),),
+        )
+
+    result = run_due_scrape_scopes_with_connection(
+        postgres_connection,
+        max_pages=1,
+        scraper=fake_scraper,
+    )
+
+    assert result.status == "success"
+    assert [stored_result.scope_name for stored_result in result.results] == ["auckland_region"]
+
+    with postgres_connection.cursor() as cursor:
+        cursor.execute(
+            "select last_success_at from scrape_scopes where name = 'north_island'"
+        )
+        current_island_last_success_at = cursor.fetchone()["last_success_at"]
+
+    assert current_island_last_success_at == island_last_success_at
+
+
+@pytest.mark.integration
 def test_scrape_and_store_scope_closes_failed_run(postgres_connection) -> None:
     def failing_scraper(site_filter, *, max_pages):
         raise RuntimeError("scrape failed")
@@ -833,6 +904,33 @@ def test_scrape_and_store_scope_closes_failed_run(postgres_connection) -> None:
 
     assert run["status"] == "failed"
     assert run["error_message"] == "scrape failed"
+
+
+@pytest.mark.integration
+def test_scrape_and_store_scope_closes_interrupted_run(postgres_connection) -> None:
+    def interrupted_scraper(site_filter, *, max_pages):
+        raise KeyboardInterrupt
+
+    with pytest.raises(KeyboardInterrupt):
+        scrape_and_store_scope_with_connection(
+            postgres_connection,
+            scope_name="auckland_central",
+            scraper=interrupted_scraper,
+        )
+
+    with postgres_connection.cursor() as cursor:
+        cursor.execute(
+            """
+            select status, error_message
+            from scrape_runs
+            order by id desc
+            limit 1
+            """
+        )
+        run = cursor.fetchone()
+
+    assert run["status"] == "failed"
+    assert run["error_message"] == "KeyboardInterrupt"
 
 
 def _listing(

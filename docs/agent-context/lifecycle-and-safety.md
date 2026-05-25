@@ -98,12 +98,12 @@ Possible causes:
 
 ## Partial Failures
 
-If the first page succeeds but a later page fails:
+If any request or parser step fails before a complete scoped result is collected:
 
 ```text
-scrape_run.status = partial_failure
+scrape_run.status = failed
 do not mark missing
-keep successfully parsed listings if implementation can do so safely
+do not persist partial scoped results
 ```
 
 Partial data should not be used to infer disappearance.
@@ -128,17 +128,28 @@ On success:
 
 ```text
 scrape_run.status = success
-scrape_scopes.last_success_at = now
-scrape_scopes.last_attempt_at = now
+direct_scope.last_attempt_at = actual attempt time
+direct_scope.last_success_at = actual completion time
+covered_enabled_narrower_scopes.last_success_at = actual completion time
 ```
+
+A complete broader run provides baseline coverage for its contained scopes.
+After that coverage timestamp has been established, a narrower run may apply
+missing-listing logic because the system has already successfully observed that
+area.
 
 On failure:
 
 ```text
-scrape_run.status = failed or partial_failure or suspicious
-scrape_scopes.last_attempt_at = now
+scrape_run.status = failed or suspicious
+direct_scope.last_attempt_at = actual attempt time
 do not update last_success_at
 ```
+
+An orderly process interruption during an active scrape closes that run as
+`failed` before the process stops. Abrupt machine or process termination can
+still leave a historical `running` row; scheduling recovery remains based on
+`last_success_at`.
 
 ## Safety Defaults
 

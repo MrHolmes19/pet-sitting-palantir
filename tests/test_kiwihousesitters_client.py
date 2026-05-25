@@ -23,11 +23,19 @@ class FakeSession:
     def __init__(self, responses: FakeResponse | list[FakeResponse]) -> None:
         self.responses = responses if isinstance(responses, list) else [responses]
         self.requested_urls: list[str] = []
+        self.requested_headers: list[dict[str, str] | None] = []
         self.posted_requests: list[tuple[str, object]] = []
         self.headers: dict[str, str] = {}
 
-    def get(self, url: str, *, timeout: int) -> FakeResponse:
+    def get(
+        self,
+        url: str,
+        *,
+        headers: dict[str, str] | None = None,
+        timeout: int,
+    ) -> FakeResponse:
         self.requested_urls.append(url)
+        self.requested_headers.append(headers)
         return self.responses.pop(0)
 
     def post(self, url: str, *, data: object, timeout: int) -> FakeResponse:
@@ -36,7 +44,7 @@ class FakeSession:
 
 
 def test_fetch_html_rejects_non_ok_status() -> None:
-    client = KiwiHouseSittersClient()
+    client = KiwiHouseSittersClient(request_interval_seconds=0)
     client._session = FakeSession(FakeResponse(status_code=204))
 
     with pytest.raises(requests.HTTPError, match="Unexpected status code: 204"):
@@ -44,7 +52,7 @@ def test_fetch_html_rejects_non_ok_status() -> None:
 
 
 def test_client_uses_browser_like_default_headers() -> None:
-    client = KiwiHouseSittersClient(user_agent="custom-agent")
+    client = KiwiHouseSittersClient(user_agent="custom-agent", request_interval_seconds=0)
 
     assert client._session.headers["User-Agent"] == "custom-agent"
     assert client._session.headers["Accept"].startswith("text/html")
@@ -53,8 +61,69 @@ def test_client_uses_browser_like_default_headers() -> None:
     assert client._session.headers["Upgrade-Insecure-Requests"] == "1"
 
 
+def test_client_rejects_negative_request_interval() -> None:
+    with pytest.raises(ValueError, match="must not be negative"):
+        KiwiHouseSittersClient(request_interval_seconds=-1)
+
+
+def test_filtered_first_page_spaces_get_and_post_requests() -> None:
+    times = iter((100.0, 100.2, 101.0))
+    sleep_delays: list[float] = []
+    fake_session = FakeSession(
+        [FakeResponse(status_code=200), FakeResponse(status_code=200)]
+    )
+    client = KiwiHouseSittersClient(
+        request_interval_seconds=1.0,
+        clock=lambda: next(times),
+        sleep_for=sleep_delays.append,
+        session_factory=lambda: fake_session,
+    )
+
+    client.fetch_first_search_page(
+        "https://example.test/search",
+        first_page_form_data={"state": "north-island"},
+    )
+
+    assert sleep_delays == [pytest.approx(0.8)]
+
+
+def test_filtered_first_pages_bootstrap_each_new_server_side_search() -> None:
+    sessions: list[FakeSession] = []
+
+    def session_factory() -> FakeSession:
+        session = FakeSession(
+            [
+                FakeResponse(status_code=200),
+                FakeResponse(status_code=200),
+            ]
+        )
+        sessions.append(session)
+        return session
+
+    client = KiwiHouseSittersClient(request_interval_seconds=0, session_factory=session_factory)
+
+    client.fetch_first_search_page(
+        "https://example.test/search",
+        first_page_form_data={"state": "north-island"},
+    )
+    client.fetch_first_search_page(
+        "https://example.test/search",
+        first_page_form_data={"state": "south-island"},
+    )
+
+    assert len(sessions) == 3
+    assert sessions[1].requested_urls == ["https://example.test/search"]
+    assert sessions[1].posted_requests == [
+        ("https://example.test/search", {"state": "north-island"})
+    ]
+    assert sessions[2].requested_urls == ["https://example.test/search"]
+    assert sessions[2].posted_requests == [
+        ("https://example.test/search", {"state": "south-island"})
+    ]
+
+
 def test_fetch_html_error_includes_sanitized_response_details() -> None:
-    client = KiwiHouseSittersClient()
+    client = KiwiHouseSittersClient(request_interval_seconds=0)
     client._session = FakeSession(
         FakeResponse(
             status_code=403,
@@ -74,6 +143,8 @@ def test_fetch_html_error_includes_sanitized_response_details() -> None:
 
     message = str(error.value)
     assert "Unexpected status code: 403" in message
+    assert "method=GET" in message
+    assert "request_number=1" in message
     assert "url=https://www.kiwihousesitters.co.nz/house-sitting-pet-sitting-jobs/search" in message
     assert "content_type=text/html" in message
     assert "server=cloudflare" in message
@@ -86,7 +157,7 @@ def test_fetch_search_pages_ignores_showmore_without_href() -> None:
       <a>Show more listings</a>
     </div>
     """
-    client = KiwiHouseSittersClient()
+    client = KiwiHouseSittersClient(request_interval_seconds=0)
     client._session = FakeSession(FakeResponse(status_code=200, text=html))
 
     pages = tuple(client.fetch_search_pages("https://example.test/search", max_pages=3))
@@ -110,8 +181,10 @@ def test_fetch_search_pages_follows_showmore_link_and_stops() -> None:
             FakeResponse(status_code=200, text=page_two_html),
         ]
     )
-    client = KiwiHouseSittersClient()
-    client._session = fake_session
+    client = KiwiHouseSittersClient(
+        request_interval_seconds=0,
+        session_factory=lambda: fake_session,
+    )
 
     pages = tuple(
         client.fetch_search_pages(
@@ -125,6 +198,13 @@ def test_fetch_search_pages_follows_showmore_link_and_stops() -> None:
     assert fake_session.requested_urls == [
         "https://www.kiwihousesitters.co.nz/house-sitting-pet-sitting-jobs/search",
         "https://www.kiwihousesitters.co.nz/house-sitting-pet-sitting-jobs/search?searchid=test&page=2",
+    ]
+    assert fake_session.requested_headers == [
+        None,
+        {
+            "X-Requested-With": "XMLHttpRequest",
+            "Referer": "https://www.kiwihousesitters.co.nz/house-sitting-pet-sitting-jobs/search",
+        },
     ]
 
 
@@ -143,8 +223,10 @@ def test_fetch_search_pages_without_page_limit_stops_when_showmore_ends() -> Non
             FakeResponse(status_code=200, text=page_two_html),
         ]
     )
-    client = KiwiHouseSittersClient()
-    client._session = fake_session
+    client = KiwiHouseSittersClient(
+        request_interval_seconds=0,
+        session_factory=lambda: fake_session,
+    )
 
     pages = tuple(
         client.fetch_search_pages(
@@ -173,8 +255,10 @@ def test_fetch_search_pages_posts_filtered_first_page_then_follows_showmore() ->
             FakeResponse(status_code=200, text=page_two_html),
         ]
     )
-    client = KiwiHouseSittersClient()
-    client._session = fake_session
+    client = KiwiHouseSittersClient(
+        request_interval_seconds=0,
+        session_factory=lambda: fake_session,
+    )
 
     pages = tuple(
         client.fetch_search_pages(
@@ -195,4 +279,11 @@ def test_fetch_search_pages_posts_filtered_first_page_then_follows_showmore() ->
             "https://www.kiwihousesitters.co.nz/house-sitting-pet-sitting-jobs/search",
             {"state": "north-island", "region": "33"},
         )
+    ]
+    assert fake_session.requested_headers == [
+        None,
+        {
+            "X-Requested-With": "XMLHttpRequest",
+            "Referer": "https://www.kiwihousesitters.co.nz/house-sitting-pet-sitting-jobs/search",
+        },
     ]

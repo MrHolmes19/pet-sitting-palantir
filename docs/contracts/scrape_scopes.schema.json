@@ -38,7 +38,7 @@
         "null"
       ],
       "format": "date-time",
-      "description": "Most recent time this scope was attempted, regardless of success."
+      "description": "Most recent time this exact configured scope issued a scrape attempt, regardless of success."
     },
     "last_success_at": {
       "type": [
@@ -46,7 +46,7 @@
         "null"
       ],
       "format": "date-time",
-      "description": "Most recent successful scrape time. Scheduler due checks use this field, not last_attempt_at, so failed runs do not make data look fresh."
+      "description": "Most recent complete successful coverage time, either from this exact scope or a broader successful containing scope. Scheduler due checks use this field, not last_attempt_at, so failed runs do not make data look fresh."
     },
     "created_at": {
       "type": "string",

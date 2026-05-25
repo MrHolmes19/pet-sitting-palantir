@@ -28,7 +28,7 @@ def create_scrape_run(
             cursor.execute(
                 """
                 update scrape_scopes
-                set last_attempt_at = now()
+                set last_attempt_at = clock_timestamp()
                 where id = %s
                 """,
                 (scope_id,),
@@ -53,7 +53,7 @@ def close_scrape_run(
             """
             update scrape_runs
             set
-              finished_at = now(),
+              finished_at = clock_timestamp(),
               status = %s,
               pages_fetched = %s,
               listings_seen = %s,
@@ -63,7 +63,7 @@ def close_scrape_run(
               alerts_sent = %s,
               error_message = %s
             where id = %s
-            returning scope_id
+            returning scope_id, finished_at
             """,
             (
                 status,
@@ -85,9 +85,16 @@ def close_scrape_run(
         if status == "success" and scope_id is not None:
             cursor.execute(
                 """
-                update scrape_scopes
-                set last_success_at = now()
-                where id = %s
+                update scrape_scopes as covered
+                set last_success_at = %s
+                from scrape_scopes as completed
+                where completed.id = %s
+                  and covered.enabled = true
+                  and covered.site_filter @> completed.site_filter
+                  and (
+                    covered.last_success_at is null
+                    or covered.last_success_at < %s
+                  )
                 """,
-                (scope_id,),
+                (row["finished_at"], scope_id, row["finished_at"]),
             )
