@@ -47,7 +47,7 @@ def test_continuous_runner_retries_after_tick_error(caplog) -> None:
 
     assert attempted_max_pages == [None, None]
     assert sleep_delays == [299, 299]
-    assert "home_runner_tick_error error_type=ConnectionError" in caplog.text
+    assert "tick_fail type=ConnectionError error=offline retry=next_tick" in caplog.text
 
 
 def test_tick_logs_scope_failure_detail(caplog) -> None:
@@ -71,8 +71,8 @@ def test_tick_logs_scope_failure_detail(caplog) -> None:
         runtime_logger=getLogger("test.home_runner"),
     )
 
-    assert "home_runner_tick_scope_failures scopes_due=1 scopes_failed=1" in caplog.text
-    assert "home_runner_scope_failed scope_name=all_nz error=Unexpected status code: 403" in (
+    assert "tick_failed due=1 failed=1" in caplog.text
+    assert "scope_fail name=all_nz error=Unexpected status code: 403" in (
         caplog.text
     )
 
@@ -105,13 +105,30 @@ def test_tick_logs_successful_scope_detail(caplog) -> None:
         runtime_logger=getLogger("test.home_runner"),
     )
 
-    assert "home_runner_tick_complete status=success scopes_due=1 scopes_succeeded=1" in (
-        caplog.text
-    )
     assert (
-        "home_runner_scope_complete scope_name=auckland_central status=success "
-        "pages_fetched=2 listings_seen=36 new_listings=1 changed_listings=2 missing_marked=0"
+        "scope_ok name=auckland_central "
+        "pages=2 listings=36 new=1 changed=2 missing=0"
     ) in caplog.text
+
+
+def test_tick_logs_heartbeat_when_no_scope_is_due(caplog) -> None:
+    caplog.set_level("INFO", logger="test.home_runner")
+
+    _run_tick(
+        max_pages=None,
+        due_scope_runner=lambda *, max_pages: DueScopeRunResult(
+            status="nothing_due",
+            scopes_due=0,
+            scopes_succeeded=0,
+            scopes_failed=0,
+            results=(),
+            failures=(),
+        ),
+        runtime_logger=getLogger("test.home_runner"),
+    )
+
+    assert "tick_start" in caplog.text
+    assert "tick_ok status=nothing_due" in caplog.text
 
 
 def test_runner_startup_logs_selected_request_interval(monkeypatch, caplog, tmp_path) -> None:
@@ -123,7 +140,7 @@ def test_runner_startup_logs_selected_request_interval(monkeypatch, caplog, tmp_
 
     run_home_runner(lock_file=tmp_path / "home-runner.lock")
 
-    assert "request_interval_seconds=0.5" in caplog.text
+    assert "runner_start tick=300s request_delay=0.5s" in caplog.text
 
 
 def test_single_instance_lock_rejects_parallel_runner(tmp_path) -> None:

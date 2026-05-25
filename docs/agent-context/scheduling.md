@@ -77,6 +77,9 @@ python -m pet_sitting_palantir --run-continuously --max-pages all
   runner restarted after a shorter outage.
 - Network or database connectivity failures are logged at `ERROR` level and the
   process keeps running; the next 5-minute tick attempts recovery.
+- Every tick logs start and completion at `INFO` level, including ticks that
+  perform no scrape because nothing is due or quiet hours apply. If a start log
+  appears without completion, investigate a blocked database or scrape request.
 - Scope scrape failures do not update `last_success_at`, so they remain eligible
   for later retry.
 
@@ -94,7 +97,8 @@ deliberately target local Docker PostgreSQL and must not be used as an unattende
 production runner.
 
 Code-owned operational values such as request pacing (`0.5` seconds), the
-five-minute tick, and quiet hours live in `src/pet_sitting_palantir/settings.py`.
+five-minute tick, quiet hours, and PostgreSQL connection failure limits live in
+`src/pet_sitting_palantir/settings.py`.
 
 ## Operational Priorities
 

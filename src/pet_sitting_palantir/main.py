@@ -47,7 +47,11 @@ def main() -> int:
         return 1 if result.scopes_failed else 0
 
     if args.run_continuously:
-        basicConfig(level=INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+        basicConfig(
+            level=INFO,
+            format="%(asctime)s %(levelname)s %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
         try:
             run_home_runner(max_pages=args.max_pages)
         except RunnerAlreadyActiveError as error:

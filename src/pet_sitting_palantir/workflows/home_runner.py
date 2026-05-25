@@ -33,7 +33,7 @@ def run_home_runner(
     """Run the production due-scope supervisor until interrupted."""
     with _single_instance_lock(lock_file):
         logger.info(
-            "home_runner_started tick_interval_seconds=%s request_interval_seconds=%s",
+            "runner_start tick=%ss request_delay=%ss",
             HOME_RUNNER_TICK_INTERVAL_SECONDS,
             KIWIHOUSESITTERS_REQUEST_INTERVAL_SECONDS,
         )
@@ -59,7 +59,7 @@ def _run_continuously(
             )
             sleep_for(_seconds_until_next_tick(clock(), tick_interval_seconds))
     except KeyboardInterrupt:
-        runtime_logger.info("home_runner_stopped")
+        runtime_logger.info("runner_stop")
 
 
 def _run_tick(
@@ -68,42 +68,37 @@ def _run_tick(
     due_scope_runner: DueScopeRunner,
     runtime_logger: Logger,
 ) -> None:
+    runtime_logger.info("tick_start")
     try:
         result = due_scope_runner(max_pages=max_pages)
     except Exception as error:
         runtime_logger.error(
-            "home_runner_tick_error error_type=%s; retrying_on_next_tick",
+            "tick_fail type=%s error=%s retry=next_tick",
             type(error).__name__,
+            error,
         )
         return
 
     if result.scopes_failed:
         runtime_logger.error(
-            "home_runner_tick_scope_failures scopes_due=%s scopes_failed=%s",
+            "tick_failed due=%s failed=%s",
             result.scopes_due,
             result.scopes_failed,
         )
         for failure in result.failures:
             runtime_logger.error(
-                "home_runner_scope_failed scope_name=%s error=%s",
+                "scope_fail name=%s error=%s",
                 failure.scope_name,
                 failure.error_message,
             )
         return
 
     if result.scopes_due:
-        runtime_logger.info(
-            "home_runner_tick_complete status=%s scopes_due=%s scopes_succeeded=%s",
-            result.status,
-            result.scopes_due,
-            result.scopes_succeeded,
-        )
         for stored_result in result.results:
             runtime_logger.info(
-                "home_runner_scope_complete scope_name=%s status=%s pages_fetched=%s "
-                "listings_seen=%s new_listings=%s changed_listings=%s missing_marked=%s",
+                "scope_ok name=%s pages=%s "
+                "listings=%s new=%s changed=%s missing=%s",
                 stored_result.scope_name,
-                stored_result.status,
                 stored_result.pages_fetched,
                 stored_result.listings_seen,
                 stored_result.new_listings,
@@ -112,7 +107,7 @@ def _run_tick(
             )
         return
 
-    runtime_logger.debug("home_runner_tick_complete status=%s scopes_due=0", result.status)
+    runtime_logger.info("tick_ok status=%s", result.status)
 
 
 def _seconds_until_next_tick(timestamp: float, tick_interval_seconds: int) -> float:
