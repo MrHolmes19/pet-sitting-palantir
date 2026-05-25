@@ -5,6 +5,12 @@ from contextlib import contextmanager
 from os import environ
 
 from pet_sitting_palantir.config import load_settings
+from pet_sitting_palantir.settings import (
+    POSTGRES_CONNECT_TIMEOUT_SECONDS,
+    POSTGRES_KEEPALIVES_COUNT,
+    POSTGRES_KEEPALIVES_IDLE_SECONDS,
+    POSTGRES_KEEPALIVES_INTERVAL_SECONDS,
+)
 
 _env_database_url = environ.pop("DATABASE_URL", None)
 try:
@@ -40,7 +46,16 @@ def database_connection(database_url: str | None = None) -> Iterator[Connection]
 def _connect_with_resolved_url(database_url: str) -> Connection:
     env_database_url = environ.pop("DATABASE_URL", None)
     try:
-        return psycopg.connect(database_url, row_factory=dict_row, prepare_threshold=None)
+        return psycopg.connect(
+            database_url,
+            row_factory=dict_row,
+            prepare_threshold=None,
+            connect_timeout=POSTGRES_CONNECT_TIMEOUT_SECONDS,
+            keepalives=1,
+            keepalives_idle=POSTGRES_KEEPALIVES_IDLE_SECONDS,
+            keepalives_interval=POSTGRES_KEEPALIVES_INTERVAL_SECONDS,
+            keepalives_count=POSTGRES_KEEPALIVES_COUNT,
+        )
     finally:
         if env_database_url is not None:
             environ["DATABASE_URL"] = env_database_url

@@ -81,41 +81,61 @@ def test_parse_search_page_extracts_multiple_real_page_style_cards() -> None:
     assert listings[1].starts_soon is False
 
 
-def test_parse_search_filter_counts_extracts_sit_lengths_and_estimated_total() -> None:
+def test_parse_estimated_result_count_uses_house_types_not_overlapping_sit_lengths() -> None:
     html = """
     <li id="sit-length-options" class="check-list" style="display:none;">
       <div data-featureid="60" class="feature-filter">
         <a
-          href="/house-sitting-pet-sitting-jobs/search?display=list&amp;state=north-island&amp;sitlengths=60"
+          href="/house-sitting-pet-sitting-jobs/search?display=list&amp;state=north-island&amp;region=33&amp;sitlengths=60"
         >
-          <span class="label">0 - 1 week (98)</span>
+          <span class="label">0 - 1 week (38)</span>
         </a>
       </div>
       <div data-featureid="61" class="feature-filter">
         <a
-          href="/house-sitting-pet-sitting-jobs/search?display=list&amp;state=north-island&amp;sitlengths=61"
+          href="/house-sitting-pet-sitting-jobs/search?display=list&amp;state=north-island&amp;region=33&amp;sitlengths=61"
         >
-          <span class="label">1 - 2 weeks (109)</span>
+          <span class="label">1 - 2 weeks (51)</span>
         </a>
       </div>
       <div data-featureid="62" class="feature-filter">
         <a
-          href="/house-sitting-pet-sitting-jobs/search?display=list&amp;state=north-island&amp;sitlengths=62"
+          href="/house-sitting-pet-sitting-jobs/search?display=list&amp;state=north-island&amp;region=33&amp;sitlengths=62"
         >
-          <span class="label">2 - 4 weeks (134)</span>
+          <span class="label">2 - 4 weeks (65)</span>
         </a>
       </div>
+    </li>
+    <li id="house-type-options" class="check-list" style="display:none;">
+      <a href="/search?housetype=house">
+        <span class="label">House (114)</span>
+      </a>
+      <a href="/search?housetype=unit">
+        <span class="label">Unit (11)</span>
+      </a>
+      <a href="/search?housetype=other">
+        <span class="label">Other (16)</span>
+      </a>
     </li>
     """
 
     counts = parse_search_filter_counts(html)
 
-    assert [(count.field, count.value, count.count) for count in counts] == [
-        ("sitlengths", "60", 98),
-        ("sitlengths", "61", 109),
-        ("sitlengths", "62", 134),
+    assert [(count.field, count.value, count.count) for count in counts[:3]] == [
+        ("sitlengths", "60", 38),
+        ("sitlengths", "61", 51),
+        ("sitlengths", "62", 65),
     ]
-    assert parse_estimated_result_count(html) == 341
+    assert parse_estimated_result_count(html) == 141
+
+
+def test_parse_estimated_result_count_does_not_sum_sit_lengths_alone() -> None:
+    html = """
+    <a href="/search?sitlengths=60"><span class="label">0 - 1 week (38)</span></a>
+    <a href="/search?sitlengths=61"><span class="label">1 - 2 weeks (51)</span></a>
+    """
+
+    assert parse_estimated_result_count(html) is None
 
 
 def test_search_page_has_cap_notice_detects_hidden_result_message() -> None:

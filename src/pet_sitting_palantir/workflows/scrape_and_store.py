@@ -155,13 +155,13 @@ def scrape_and_store_scope_with_connection(
             missing_marked=missing_marked,
             status="success",
         )
-    except Exception as error:
+    except BaseException as error:
         _rollback_if_transactional(connection)
         close_scrape_run(
             connection,
             run_id=run_id,
             status="failed",
-            error_message=str(error),
+            error_message=str(error) or type(error).__name__,
         )
         _commit_if_transactional(connection)
         raise

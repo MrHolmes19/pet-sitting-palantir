@@ -4,9 +4,8 @@ from types import MappingProxyType
 
 BASE_URL = "https://www.kiwihousesitters.co.nz"
 SEARCH_PATH = "/house-sitting-pet-sitting-jobs/search"
-SEARCH_URL = f"{BASE_URL}{SEARCH_PATH}"
+SEARCH_URL = f"{BASE_URL}{SEARCH_PATH}?view=list"
 
-DEFAULT_TIMEOUT_SECONDS = 20
 DEFAULT_MAX_PAGES = 1
 DEFAULT_SCOPE_NAME = "all_nz"
 DEFAULT_USER_AGENT = (
@@ -25,6 +24,11 @@ DEFAULT_REQUEST_HEADERS = MappingProxyType(
         "Connection": "keep-alive",
         "Referer": BASE_URL,
         "Upgrade-Insecure-Requests": "1",
+    }
+)
+PAGINATION_REQUEST_HEADERS = MappingProxyType(
+    {
+        "X-Requested-With": "XMLHttpRequest",
     }
 )
 

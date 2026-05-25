@@ -35,7 +35,9 @@ run_due = last_success_at is null
 ```
 
 Use `last_success_at`, not `last_attempt_at`, so failed runs do not falsely
-advance the schedule.
+advance the schedule. `last_success_at` means the scope was freshly covered by
+a successful complete scrape: a successful broader scope also advances covered
+narrower scopes. `last_attempt_at` records only direct requests for that scope.
 
 The implementation allows a small scheduler grace window before the exact
 interval boundary. External schedulers do not start on exact seconds, and without
@@ -54,7 +56,8 @@ Examples:
 - If `all_nz` remains as a logical root, it should expand into island child
   searches and suppress narrower due scopes for that invocation.
 - On a fresh database, do not run every seeded overlapping scope just because all
-  `last_success_at` values are null. Establish the broad baseline first.
+  `last_success_at` values are null. Establish the broad baseline first and
+  initialize the covered narrower schedules from that successful observation.
 
 This reduces duplicate site requests, avoids redundant upserts, and prevents
 overlapping scopes from making lifecycle decisions from inconsistent partial
