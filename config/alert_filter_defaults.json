@@ -1,0 +1,41 @@
+{
+  "enabled": true,
+  "local_filter": {
+    "date_window_match": "contained",
+    "start_date_on_or_after": null,
+    "end_date_on_or_before": null,
+    "min_duration_days": null,
+    "max_duration_days": null,
+    "allowed_islands": null,
+    "allowed_regions": null,
+    "allowed_subregions": null,
+    "max_total_animals": null,
+    "max_dogs": null,
+    "dogs_allowed": false,
+    "cats_allowed": false,
+    "fish_allowed": false,
+    "birds_allowed": false,
+    "rabbits_guinea_pigs_allowed": false,
+    "chickens_ducks_geese_allowed": false,
+    "farm_animals_allowed": false,
+    "horses_allowed": false,
+    "reptiles_allowed": false,
+    "other_pets_allowed": false,
+    "no_pets_allowed": false,
+    "min_reply_rating_score": null,
+    "allowed_house_types": null,
+    "excluded_house_types": [],
+    "include_keywords": [],
+    "exclude_keywords": []
+  },
+  "delivery": {
+    "channels": [
+      "telegram"
+    ],
+    "quiet_hours": {
+      "timezone": "Pacific/Auckland",
+      "start": "00:00",
+      "end": "06:00"
+    }
+  }
+}

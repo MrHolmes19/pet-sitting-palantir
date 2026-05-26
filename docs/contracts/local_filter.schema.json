@@ -3,78 +3,153 @@
   "$id": "https://pet-sitting-palantir.local/contracts/local_filter.schema.json",
   "title": "local_filter",
   "type": "object",
-  "description": "Flexible local matching rules evaluated by application code. This is intentionally JSONB so we can experiment with combinations without changing the database schema.",
+  "description": "Flexible local listing matching rules evaluated by application code. Animal categories are opt-in: an omitted or false *_allowed value excludes that category.",
   "additionalProperties": true,
   "properties": {
+    "date_window_match": {
+      "type": "string",
+      "enum": [
+        "contained",
+        "overlaps"
+      ],
+      "description": "How a configured date window is applied to a sit."
+    },
+    "start_date_on_or_after": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date",
+      "description": "Earliest inclusive sit start date, including its year."
+    },
+    "end_date_on_or_before": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date",
+      "description": "Latest inclusive sit end date, including its year."
+    },
     "min_duration_days": {
-      "type": "integer",
+      "type": [
+        "integer",
+        "null"
+      ],
       "minimum": 0,
-      "description": "Minimum sit duration."
+      "description": "Minimum sit duration in nights."
     },
     "max_duration_days": {
-      "type": "integer",
+      "type": [
+        "integer",
+        "null"
+      ],
       "minimum": 0,
-      "description": "Maximum sit duration."
+      "description": "Maximum sit duration in nights."
     },
     "allowed_islands": {
-      "type": "array",
+      "type": [
+        "array",
+        "null"
+      ],
       "items": {
         "type": "string"
       },
-      "description": "Allowed islands."
+      "description": "Allowed normalized islands."
     },
     "allowed_regions": {
-      "type": "array",
+      "type": [
+        "array",
+        "null"
+      ],
       "items": {
         "type": "string"
       },
-      "description": "Allowed regions."
+      "description": "Allowed normalized regions."
     },
     "allowed_subregions": {
-      "type": "array",
+      "type": [
+        "array",
+        "null"
+      ],
       "items": {
         "type": "string"
       },
-      "description": "Allowed subregions."
+      "description": "Allowed normalized subregions."
     },
     "max_total_animals": {
-      "type": "integer",
+      "type": [
+        "integer",
+        "null"
+      ],
       "minimum": 0,
-      "description": "Maximum total animals."
+      "description": "Maximum total animal count."
     },
     "max_dogs": {
-      "type": "integer",
+      "type": [
+        "integer",
+        "null"
+      ],
       "minimum": 0,
-      "description": "Maximum dogs."
-    },
-    "cats_only": {
-      "type": "boolean",
-      "description": "Whether only cat listings should match."
+      "description": "Maximum dog count, inclusive."
     },
     "dogs_allowed": {
       "type": "boolean",
-      "description": "Whether dog listings can match."
+      "description": "Whether listings containing dogs can match."
     },
     "cats_allowed": {
       "type": "boolean",
-      "description": "Whether cat listings can match."
+      "description": "Whether listings containing cats can match."
+    },
+    "fish_allowed": {
+      "type": "boolean",
+      "description": "Whether listings containing fish can match."
+    },
+    "birds_allowed": {
+      "type": "boolean",
+      "description": "Whether listings containing birds can match."
+    },
+    "rabbits_guinea_pigs_allowed": {
+      "type": "boolean",
+      "description": "Whether listings containing rabbits or guinea pigs can match."
+    },
+    "chickens_ducks_geese_allowed": {
+      "type": "boolean",
+      "description": "Whether listings containing chickens, ducks, or geese can match."
     },
     "farm_animals_allowed": {
       "type": "boolean",
-      "description": "Whether farm animal listings can match."
+      "description": "Whether listings containing farm animals can match."
     },
     "horses_allowed": {
       "type": "boolean",
-      "description": "Whether horse listings can match."
+      "description": "Whether listings containing horses can match."
+    },
+    "reptiles_allowed": {
+      "type": "boolean",
+      "description": "Whether listings containing reptiles can match."
+    },
+    "other_pets_allowed": {
+      "type": "boolean",
+      "description": "Whether listings containing unclassified pets can match."
+    },
+    "no_pets_allowed": {
+      "type": "boolean",
+      "description": "Whether sits explicitly marked as having no pets can match."
     },
     "min_reply_rating_score": {
-      "type": "integer",
+      "type": [
+        "integer",
+        "null"
+      ],
       "minimum": 0,
       "maximum": 10,
-      "description": "Minimum reply rating score."
+      "description": "Minimum homeowner reply rating score."
     },
     "allowed_house_types": {
-      "type": "array",
+      "type": [
+        "array",
+        "null"
+      ],
       "items": {
         "type": "string"
       },
@@ -104,34 +179,32 @@
   },
   "examples": [
     {
-      "min_duration_days": 7,
-      "max_duration_days": 45,
-      "allowed_regions": [
-        "Auckland"
-      ],
-      "allowed_subregions": [
-        "Auckland - Central",
-        "North Shore City"
-      ],
-      "max_total_animals": 3,
-      "max_dogs": 2,
-      "cats_allowed": true,
+      "date_window_match": "contained",
+      "start_date_on_or_after": null,
+      "end_date_on_or_before": null,
+      "min_duration_days": null,
+      "max_duration_days": null,
+      "allowed_islands": null,
+      "allowed_regions": null,
+      "allowed_subregions": null,
+      "max_total_animals": null,
+      "max_dogs": null,
+      "dogs_allowed": false,
+      "cats_allowed": false,
+      "fish_allowed": false,
+      "birds_allowed": false,
+      "rabbits_guinea_pigs_allowed": false,
+      "chickens_ducks_geese_allowed": false,
       "farm_animals_allowed": false,
       "horses_allowed": false,
-      "min_reply_rating_score": 5,
-      "allowed_house_types": [
-        "House",
-        "Unit",
-        "Flat"
-      ],
-      "excluded_house_types": [
-        "Farm House"
-      ],
-      "exclude_keywords": [
-        "farm",
-        "rural",
-        "own transport required"
-      ]
+      "reptiles_allowed": false,
+      "other_pets_allowed": false,
+      "no_pets_allowed": false,
+      "min_reply_rating_score": null,
+      "allowed_house_types": null,
+      "excluded_house_types": [],
+      "include_keywords": [],
+      "exclude_keywords": []
     }
   ]
 }

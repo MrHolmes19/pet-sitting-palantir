@@ -7,6 +7,8 @@ from referencing import Registry, Resource
 
 CONTRACTS_DIR = Path(__file__).parents[1] / "docs" / "contracts"
 MIGRATIONS_DIR = Path(__file__).parents[1] / "supabase" / "migrations"
+ALERT_FILTER_CONFIG = Path(__file__).parents[1] / "config" / "alert_filters.json"
+ALERT_FILTER_DEFAULTS = Path(__file__).parents[1] / "config" / "alert_filter_defaults.json"
 
 TABLE_CONTRACTS = {
     "scrape_scopes": CONTRACTS_DIR / "scrape_scopes.schema.json",
@@ -117,6 +119,29 @@ def test_nested_filter_contracts_are_referenced_not_duplicated() -> None:
     assert scrape_scopes["properties"]["site_filter"]["$ref"] == "site_filter.schema.json"
     assert alert_filters["properties"]["site_filter"]["$ref"] == "site_filter.schema.json"
     assert alert_filters["properties"]["local_filter"]["$ref"] == "local_filter.schema.json"
+
+
+def test_editable_alert_filters_use_documented_filter_contracts() -> None:
+    configuration = json.loads(ALERT_FILTER_CONFIG.read_text())
+    defaults = json.loads(ALERT_FILTER_DEFAULTS.read_text())
+    registry = _registry()
+    site_filter_validator = Draft202012Validator(
+        _load_schema(CONTRACTS_DIR / "site_filter.schema.json"),
+        registry=registry,
+    )
+    local_filter_validator = Draft202012Validator(
+        _load_schema(CONTRACTS_DIR / "local_filter.schema.json"),
+        format_checker=FormatChecker(),
+        registry=registry,
+    )
+
+    local_filter_schema = _load_schema(CONTRACTS_DIR / "local_filter.schema.json")
+    local_filter_validator.validate(defaults["local_filter"])
+    assert set(defaults["local_filter"]) == set(local_filter_schema["properties"])
+
+    for alert_filter in configuration["filters"]:
+        site_filter_validator.validate(alert_filter["site_filter"])
+        local_filter_validator.validate(alert_filter["local_filter"])
 
 
 def test_listings_contract_excludes_raw_parser_fields() -> None:
