@@ -7,7 +7,6 @@ from typing import Any
 
 from psycopg import Connection
 
-from pet_sitting_palantir.kiwihousesitters.constants import DEFAULT_MAX_PAGES
 from pet_sitting_palantir.settings import (
     NEW_ZEALAND_TIME_ZONE,
     QUIET_HOURS_END,
@@ -50,7 +49,7 @@ class DueScopeRunResult:
 
 def run_due_scrape_scopes(
     *,
-    max_pages: int | None = DEFAULT_MAX_PAGES,
+    max_pages: int | None = None,
     database_url: str | None = None,
     scraper: Scraper | None = None,
     current_time: datetime | None = None,
@@ -80,7 +79,7 @@ def run_due_scrape_scopes(
 def run_due_scrape_scopes_with_connection(
     connection: Connection,
     *,
-    max_pages: int | None = DEFAULT_MAX_PAGES,
+    max_pages: int | None = None,
     scraper: Scraper | None = None,
 ) -> DueScopeRunResult:
     """Run due scopes using an existing database connection."""

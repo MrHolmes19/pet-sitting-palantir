@@ -154,6 +154,7 @@ create table listings (
   missing_count int not null default 0,
   missing_since timestamptz,
   closed_at timestamptz,
+  appearance_sequence int not null default 1,
 
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -164,6 +165,12 @@ create table listings (
 
 - `baseline`: first seen during a scope's first successful scrape. The listing may have been live before this system started observing, so it is left-censored and should be excluded from average listing-time calculations unless handled separately.
 - `observed`: first seen after that scope already had a successful baseline observation.
+
+`appearance_sequence` identifies distinct confirmed online appearances of the
+same external listing id. It starts at `1` and increments when a listing
+previously marked `missing_confirmed` is observed again. It does not increment
+after `missing_once`, since that status is not sufficient evidence that the
+listing was genuinely offline.
 
 Suggested indexes:
 
@@ -246,60 +253,114 @@ Example:
 
 ```json
 {
-  "name": "Auckland Central good sits",
+  "name": "Auckland Central sample rule",
   "site_filter": {
     "state": "north-island",
     "region": "auckland",
     "subregion": "auckland-central"
   },
   "local_filter": {
+    "date_window_match": "contained",
+    "start_date_on_or_after": "2027-06-01",
+    "end_date_on_or_before": "2027-08-31",
     "min_duration_days": 7,
     "max_duration_days": 45,
+    "allowed_islands": ["North Island"],
+    "allowed_regions": ["Auckland"],
+    "allowed_subregions": ["Auckland - Central"],
+    "max_total_animals": 3,
     "max_dogs": 2,
-    "allow_cats": true,
-    "allow_farm_animals": false,
-    "exclude_keywords": ["farm", "own transport required"]
+    "dogs_allowed": true,
+    "cats_allowed": true,
+    "fish_allowed": false,
+    "birds_allowed": false,
+    "rabbits_guinea_pigs_allowed": false,
+    "chickens_ducks_geese_allowed": false,
+    "farm_animals_allowed": false,
+    "horses_allowed": false,
+    "reptiles_allowed": false,
+    "other_pets_allowed": false,
+    "no_pets_allowed": false,
+    "min_reply_rating_score": 5,
+    "allowed_house_types": ["House", "Unit", "Flat"],
+    "excluded_house_types": ["Farm House"],
+    "include_keywords": ["wifi"],
+    "exclude_keywords": ["rural", "own transport required"]
   }
 }
 ```
 
-## `sent_alerts`
+Editable filter defaults live in `config/alert_filter_defaults.json`, and named
+filter overrides live in `config/alert_filters.json`; a later synchronization
+step will populate the table from the merged definitions. The JSON above
+illustrates supported fields, not a permanent personal filter.
 
-Tracks sent notifications and prevents alert spam.
+## `alert_events`
 
-Preferred v1 shape:
+One row represents the channel-independent decision that a listing matches an
+alert filter for a particular relevant version of one online appearance.
 
 ```sql
-create table sent_alerts (
+create table alert_events (
   id bigserial primary key,
 
   listing_id bigint not null references listings(id),
   filter_id bigint not null references alert_filters(id),
+  detected_run_id bigint not null references scrape_runs(id),
 
-  sent_at timestamptz not null default now(),
-  channel text not null default 'telegram',
+  event_type text not null,
+  appearance_sequence int not null,
+  alert_fingerprint text not null,
+  listing_content_hash text not null,
 
-  status text not null default 'sent',
-  message text,
-  error_message text,
-  attempt_count int not null default 1,
+  target_channels text[] not null,
+  deliver_after timestamptz not null default now(),
+  created_at timestamptz not null default now(),
 
-  content_hash_at_alert text not null,
-
-  unique (listing_id, filter_id, channel, content_hash_at_alert)
+  unique (listing_id, filter_id, appearance_sequence, alert_fingerprint)
 );
 ```
 
-Using `content_hash_at_alert` allows a meaningful listing change, such as changed dates or pet counts, to trigger a new alert. Since `starts_soon` is excluded from `content_hash`, the site-provided `Starts soon` signal should not cause noisy duplicate alerts.
+`event_type` values:
 
-Suggested indexes:
+- `first_match`
+- `became_match`
+- `material_change`
+- `confirmed_reappearance`
+
+`alert_fingerprint` must include only alert-relevant location, date/duration,
+and animal data. `listing_content_hash` stores the observed general listing
+version for audit, but is not the duplicate key.
+
+`appearance_sequence` allows an external listing id to alert in a later
+confirmed reappearance even if its fields return to a version seen in an older
+appearance. `target_channels` and `deliver_after` snapshot the delivery plan
+when an event is created, so quiet-hour deferral remains deterministic after
+filter configuration changes.
+
+## `alert_delivery_attempts`
+
+One row records each outbound call to a notification provider. Failed attempts
+remain as history and later retries create additional rows. A partial unique
+index permits at most one successful attempt for an event and channel.
 
 ```sql
-create index sent_alerts_filter_sent_idx
-  on sent_alerts (filter_id, sent_at desc);
+create table alert_delivery_attempts (
+  id bigserial primary key,
 
-create index sent_alerts_status_sent_idx
-  on sent_alerts (status, sent_at desc);
+  alert_event_id bigint not null references alert_events(id),
+  channel text not null,
+
+  attempted_at timestamptz not null default now(),
+  status text not null,
+  message text,
+  provider_message_id text,
+  error_message text
+);
+
+create unique index alert_delivery_attempts_unique_success_idx
+  on alert_delivery_attempts (alert_event_id, channel)
+  where status = 'sent';
 ```
 
 ## Content Hash

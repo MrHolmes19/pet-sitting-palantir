@@ -49,7 +49,7 @@
   "examples": [
     {
       "id": 10,
-      "name": "Auckland Central good sits",
+      "name": "Auckland Central sample rule",
       "enabled": true,
       "site_filter": {
         "state": "north-island",
@@ -57,20 +57,33 @@
         "subregion": "auckland-central"
       },
       "local_filter": {
+        "date_window_match": "contained",
+        "start_date_on_or_after": "2027-06-01",
+        "end_date_on_or_before": "2027-08-31",
         "min_duration_days": 7,
         "max_duration_days": 45,
+        "allowed_islands": [
+          "North Island"
+        ],
         "allowed_regions": [
           "Auckland"
         ],
         "allowed_subregions": [
-          "Auckland - Central",
-          "North Shore City"
+          "Auckland - Central"
         ],
         "max_total_animals": 3,
         "max_dogs": 2,
+        "dogs_allowed": true,
         "cats_allowed": true,
+        "fish_allowed": false,
+        "birds_allowed": false,
+        "rabbits_guinea_pigs_allowed": false,
+        "chickens_ducks_geese_allowed": false,
         "farm_animals_allowed": false,
         "horses_allowed": false,
+        "reptiles_allowed": false,
+        "other_pets_allowed": false,
+        "no_pets_allowed": false,
         "min_reply_rating_score": 5,
         "allowed_house_types": [
           "House",
@@ -80,8 +93,10 @@
         "excluded_house_types": [
           "Farm House"
         ],
+        "include_keywords": [
+          "wifi"
+        ],
         "exclude_keywords": [
-          "farm",
           "rural",
           "own transport required"
         ]

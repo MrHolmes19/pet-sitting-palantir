@@ -107,20 +107,17 @@ uv run python -m pet_sitting_palantir --scope all_nz --max-pages 1 --summary --p
 Scrape one database-backed scope and persist normalized listings:
 
 ```bash
-scripts/persist-local.sh auckland_central 1
+scripts/persist-local.sh auckland_central all
 ```
 
 Run every database-backed scope that is due:
 
 ```bash
-scripts/run-due-local.sh 1
-```
-
-Use `all` to follow pagination until the site has no next page:
-
-```bash
 scripts/run-due-local.sh all
 ```
+
+Persisted scrapes require `--max-pages all`: a bounded page sample is not
+complete enough to infer that previously seen listings have disappeared.
 
 The `--run-due` workflow used for ongoing production scraping pauses from
 midnight through 05:59 New Zealand time.
@@ -128,22 +125,29 @@ midnight through 05:59 New Zealand time.
 If `DATABASE_URL` is set in a local `.env` file, you can also run:
 
 ```bash
-uv run python -m pet_sitting_palantir --run-due --max-pages 1 --pretty
+uv run python -m pet_sitting_palantir --run-due --max-pages all --pretty
 ```
 
 If `DATABASE_URL` is set in the environment or in a local `.env` file, you can also run:
 
 ```bash
-uv run python -m pet_sitting_palantir --scope auckland_central --max-pages 1 --persist --pretty
+uv run python -m pet_sitting_palantir --scope auckland_central --max-pages all --persist --pretty
 ```
 
 ## Database
 
 Schema SQL lives in `supabase/migrations`.
+Database initialization applies pending migrations before seeding configuration
+rows.
 
 Initial scope seed data lives in `supabase/seed.sql`.
 
 Database record contracts are documented in `docs/contracts`.
+
+Editable alert defaults live in `config/alert_filter_defaults.json`, which
+lists every supported matching option and delivery default. Named filters in
+`config/alert_filters.json` override those defaults and provide their own
+geography.
 
 Listings first discovered during a scope's first successful scrape are stored
 with `first_seen_context = 'baseline'`. They may have existed before this
@@ -223,11 +227,13 @@ restartable production runner with:
 scripts/run-production.sh
 ```
 
-It runs due scopes immediately and then checks again every 5 minutes. Stop it
-with `Ctrl+C`; restarting the same command resumes from successful run
-timestamps stored in PostgreSQL. If connectivity temporarily fails, the runner
-stays alive and retries on a later tick. The existing `*-local.sh` scripts remain
-development helpers that always target local Docker PostgreSQL.
+On startup, this command applies any pending SQL migrations to the configured
+production database, then runs due scopes immediately and checks again every 5
+minutes. If migration application fails, scraping does not start. Stop it with
+`Ctrl+C`; restarting the same command resumes from successful run timestamps
+stored in PostgreSQL. If connectivity temporarily fails, the runner stays alive
+and retries on a later tick. The existing `*-local.sh` scripts remain development
+helpers that always target local Docker PostgreSQL.
 
 Code-owned runtime values such as scraper request pacing, quiet hours, and the
 home-runner tick interval are centralized in

@@ -17,6 +17,10 @@ It is a foreground process: leave it running on the home machine and use
 `Ctrl+C` for an intentional stop. It can be started again later without
 manually repairing schedule state.
 
+On startup, `scripts/run-production.sh` applies pending database migrations
+before launching the runner. This keeps schema updates aligned with newly
+deployed home-runner code; a failed migration must stop startup before scraping.
+
 ## Why The Cloud Path Was Dropped
 
 GitHub Actions cron was tested first, but scheduled executions were not reliable

@@ -30,6 +30,22 @@ def test_run_due_scrape_scopes_pauses_during_new_zealand_quiet_hours(monkeypatch
     assert result.scopes_failed == 0
 
 
+def test_run_due_scrape_scopes_pauses_from_midnight(monkeypatch) -> None:
+    def unexpected_database_connection(database_url=None):
+        raise AssertionError("quiet-hours runs should not connect to Postgres")
+
+    monkeypatch.setattr(
+        "pet_sitting_palantir.workflows.run_due_scopes.connect_database",
+        unexpected_database_connection,
+    )
+
+    result = run_due_scrape_scopes(
+        current_time=datetime(2026, 5, 24, 0, 0, tzinfo=NEW_ZEALAND_TIME_ZONE)
+    )
+
+    assert result.status == "quiet_hours"
+
+
 def test_run_due_scrape_scopes_resumes_at_six_am_new_zealand_time(monkeypatch) -> None:
     class FakeConnection:
         closed = False

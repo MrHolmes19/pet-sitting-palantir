@@ -1,0 +1,26 @@
+{
+  "filters": [
+    {
+      "name": "Post Luka",
+      "site_filter": {
+        "state": "north-island",
+        "region": "auckland",
+        "subregion": "auckland-central"
+      },
+      "local_filter": {
+        "date_window_match": "contained",
+        "start_date_on_or_after": "2026-08-01",
+        "end_date_on_or_before": "2026-11-30",
+        "min_duration_days": 8,
+        "max_dogs": 2,
+        "dogs_allowed": true,
+        "cats_allowed": true,
+        "fish_allowed": true,
+        "birds_allowed": true,
+        "rabbits_guinea_pigs_allowed": true,
+        "no_pets_allowed": true,
+        "excluded_house_types": ["Farm House"]
+      }
+    }
+  ]
+}

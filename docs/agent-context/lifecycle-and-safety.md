@@ -21,6 +21,18 @@ missing_count = 0
 missing_since = null
 ```
 
+Each listing has `appearance_sequence`, initially `1`. If the prior persisted
+status is `missing_confirmed` when it appears again:
+
+```text
+appearance_sequence += 1
+confirmed_reappearance = true
+```
+
+Capture prior status and prior content hash before resetting the listing to
+`active`; alert-event evaluation needs those pre-update values. Observing a
+`missing_once` listing does not increment `appearance_sequence`.
+
 If it is new:
 
 ```text

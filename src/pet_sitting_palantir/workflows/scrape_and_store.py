@@ -6,6 +6,11 @@ from typing import Any, Protocol
 
 from psycopg import Connection
 
+from pet_sitting_palantir.alerts import (
+    AlertFilterDefinition,
+    CreatedAlertEvent,
+    create_alert_events,
+)
 from pet_sitting_palantir.kiwihousesitters.constants import DEFAULT_MAX_PAGES
 from pet_sitting_palantir.kiwihousesitters.scraper import ScrapeResult, scrape_scope
 from pet_sitting_palantir.kiwihousesitters.search_filters import build_search_request
@@ -46,16 +51,20 @@ class StoredScrapeResult:
     changed_listings: int
     missing_marked: int
     status: str
+    alert_events: tuple[CreatedAlertEvent, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-serializable representation."""
-        return asdict(self)
+        payload = asdict(self)
+        payload.pop("alert_events")
+        payload["alerts_created"] = len(self.alert_events)
+        return payload
 
 
 def scrape_and_store_scope(
     *,
     scope_name: str,
-    max_pages: int | None = DEFAULT_MAX_PAGES,
+    max_pages: int | None = None,
     database_url: str | None = None,
     scraper: Scraper = scrape_scope,
 ) -> StoredScrapeResult:
@@ -76,10 +85,17 @@ def scrape_and_store_scope_with_connection(
     connection: Connection,
     *,
     scope_name: str,
-    max_pages: int | None = DEFAULT_MAX_PAGES,
+    max_pages: int | None = None,
     scraper: Scraper = scrape_scope,
+    alert_filters: tuple[AlertFilterDefinition, ...] | None = None,
 ) -> StoredScrapeResult:
     """Scrape one enabled scope using an existing database connection."""
+    if max_pages is not None:
+        raise ValueError(
+            "Persisted scrapes require --max-pages all so missing-listing lifecycle "
+            "updates are based on complete coverage"
+        )
+
     scope = read_enabled_scrape_scope(connection, name=scope_name)
     if scope is None:
         raise ValueError(f"Enabled scrape scope does not exist: {scope_name}")
@@ -124,6 +140,12 @@ def scrape_and_store_scope_with_connection(
             run_id=run_id,
             first_seen_context="baseline" if scope.last_success_at is None else "observed",
         )
+        alert_event_summary = create_alert_events(
+            connection,
+            observations=zip(records, summary.results, strict=True),
+            run_id=run_id,
+            filter_definitions=alert_filters,
+        )
         missing_marked = (
             0
             if scope.last_success_at is None
@@ -154,6 +176,7 @@ def scrape_and_store_scope_with_connection(
             changed_listings=summary.changed_listings,
             missing_marked=missing_marked,
             status="success",
+            alert_events=alert_event_summary.events,
         )
     except BaseException as error:
         _rollback_if_transactional(connection)

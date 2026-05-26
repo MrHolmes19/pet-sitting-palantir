@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pet-sitting-palantir.local/contracts/alert_delivery_attempts.schema.json",
+  "title": "alert_delivery_attempts",
+  "type": "object",
+  "description": "One outbound provider attempt for one alert event channel. Failed attempts may be followed by retries; at most one successful attempt is retained per event and channel.",
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "integer",
+      "description": "Internal database id."
+    },
+    "alert_event_id": {
+      "type": "integer",
+      "description": "Channel-independent alert event being delivered."
+    },
+    "channel": {
+      "type": "string",
+      "description": "Provider channel used for this attempt, such as telegram or email."
+    },
+    "attempted_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Time the provider request was attempted."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "sent",
+        "failed"
+      ],
+      "description": "Result returned for this provider attempt."
+    },
+    "message": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Message body submitted to the provider."
+    },
+    "provider_message_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Provider-specific successful-message identifier when one is returned."
+    },
+    "error_message": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Concise provider failure detail for a failed attempt."
+    }
+  },
+  "required": [
+    "id",
+    "alert_event_id",
+    "channel",
+    "attempted_at",
+    "status",
+    "message",
+    "provider_message_id",
+    "error_message"
+  ],
+  "examples": [
+    {
+      "id": 9001,
+      "alert_event_id": 101,
+      "channel": "telegram",
+      "attempted_at": "2026-06-01T18:00:01Z",
+      "status": "sent",
+      "message": "New matching sit found.",
+      "provider_message_id": "telegram-message-42",
+      "error_message": null
+    }
+  ]
+}

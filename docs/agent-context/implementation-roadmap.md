@@ -43,7 +43,8 @@ Deliverables:
   - `scrape_runs`
   - `listings`
   - `alert_filters`
-  - `sent_alerts`
+  - `alert_events`
+  - `alert_delivery_attempts`
 - Seed data for initial scrape scopes.
 - Basic indexes.
 
@@ -62,6 +63,8 @@ Deliverables:
 - Expiration handling for `expired_by_date`.
 - Due-scope runner using `last_success_at` and `interval_minutes`.
 - Baseline tagging for listings found during a scope's first successful scrape.
+- Appearance sequencing and prior-status reporting for confirmed
+  reappearance detection.
 
 ## Phase 5 - Telegram Alerts
 
@@ -69,10 +72,12 @@ Goal: notify when listings match personal filters.
 
 Deliverables:
 
+- Editable `config/alert_filters.json` filter and delivery configuration.
 - Local filter matcher.
-- Telegram sender.
-- `sent_alerts` insert/update logic.
-- Duplicate prevention using `content_hash_at_alert`.
+- Channel-neutral alert event and delivery tracking.
+- Telegram sender behind a notification-provider interface.
+- Duplicate prevention using an alert-relevant fingerprint limited to
+  location, dates/duration, and animal fields.
 
 ## Phase 6 - Home-Hosted Scheduled Production Run
 
