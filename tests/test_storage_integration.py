@@ -1,6 +1,7 @@
 import os
 from collections.abc import Iterator
-from datetime import date
+from dataclasses import replace
+from datetime import date, time
 from pathlib import Path
 from uuid import uuid4
 
@@ -8,6 +9,7 @@ import pytest
 from psycopg import sql
 from psycopg.rows import dict_row
 
+from pet_sitting_palantir.alerts import AlertDelivery, AlertFilterDefinition, AlertQuietHours
 from pet_sitting_palantir.domain.models import Listing
 from pet_sitting_palantir.kiwihousesitters.scraper import ScrapeResult
 from pet_sitting_palantir.storage import (
@@ -498,6 +500,196 @@ def test_scrape_and_store_scope_persists_scraper_result(postgres_connection) -> 
         "status": "active",
         "first_seen_context": "baseline",
     }
+
+
+@pytest.mark.integration
+def test_successful_scrape_synchronizes_filter_and_creates_vendor_neutral_event(
+    postgres_connection,
+) -> None:
+    definition = _matching_alert_filter()
+
+    def fake_scraper(site_filter, *, max_pages):
+        return ScrapeResult(
+            search_url="https://example.test/search",
+            pages_fetched=1,
+            listings=(_matching_listing(),),
+        )
+
+    result = scrape_and_store_scope_with_connection(
+        postgres_connection,
+        scope_name="auckland_central",
+        scraper=fake_scraper,
+        alert_filters=(definition,),
+    )
+
+    with postgres_connection.cursor() as cursor:
+        cursor.execute(
+            """
+            select
+              alert_filters.name,
+              alert_filters.enabled,
+              alert_events.event_type,
+              alert_events.target_channels,
+              alert_events.listing_content_hash,
+              count(alert_delivery_attempts.id) as delivery_attempts
+            from alert_filters
+            join alert_events on alert_events.filter_id = alert_filters.id
+            left join alert_delivery_attempts
+              on alert_delivery_attempts.alert_event_id = alert_events.id
+            where alert_events.detected_run_id = %s
+            group by alert_filters.name, alert_filters.enabled, alert_events.id
+            """,
+            (result.run_id,),
+        )
+        event = cursor.fetchone()
+
+    assert event == {
+        "name": definition.name,
+        "enabled": True,
+        "event_type": "first_match",
+        "target_channels": ["telegram", "email"],
+        "listing_content_hash": "matching-v1",
+        "delivery_attempts": 0,
+    }
+
+
+@pytest.mark.integration
+def test_successful_scrapes_only_create_new_event_for_material_fingerprint_change(
+    postgres_connection,
+) -> None:
+    definition = _matching_alert_filter()
+
+    def scrape(listing):
+        return lambda site_filter, *, max_pages: ScrapeResult(
+            search_url="https://example.test/search",
+            pages_fetched=1,
+            listings=(listing,),
+        )
+
+    scrape_and_store_scope_with_connection(
+        postgres_connection,
+        scope_name="auckland_central",
+        scraper=scrape(_matching_listing()),
+        alert_filters=(definition,),
+    )
+    scrape_and_store_scope_with_connection(
+        postgres_connection,
+        scope_name="auckland_central",
+        scraper=scrape(
+            replace(_matching_listing(), content_hash="display-only", title="New title")
+        ),
+        alert_filters=(definition,),
+    )
+    scrape_and_store_scope_with_connection(
+        postgres_connection,
+        scope_name="auckland_central",
+        scraper=scrape(
+            replace(
+                _matching_listing(),
+                content_hash="new-date",
+                start_date=date(2026, 8, 2),
+            )
+        ),
+        alert_filters=(definition,),
+    )
+
+    with postgres_connection.cursor() as cursor:
+        cursor.execute(
+            """
+            select event_type
+            from alert_events
+            order by id
+            """
+        )
+        event_types = [row["event_type"] for row in cursor.fetchall()]
+
+    assert event_types == ["first_match", "material_change"]
+
+
+@pytest.mark.integration
+def test_confirmed_reappearance_with_change_creates_reappearance_event(
+    postgres_connection,
+) -> None:
+    definition = _matching_alert_filter()
+
+    def scrape(listing):
+        return lambda site_filter, *, max_pages: ScrapeResult(
+            search_url="https://example.test/search",
+            pages_fetched=1,
+            listings=(listing,),
+        )
+
+    scrape_and_store_scope_with_connection(
+        postgres_connection,
+        scope_name="auckland_central",
+        scraper=scrape(_matching_listing()),
+        alert_filters=(definition,),
+    )
+    with postgres_connection.cursor() as cursor:
+        cursor.execute(
+            """
+            update listings
+            set status = 'missing_confirmed',
+                missing_count = 6,
+                missing_since = now(),
+                closed_at = now()
+            where external_id = 'matching-listing'
+            """
+        )
+    scrape_and_store_scope_with_connection(
+        postgres_connection,
+        scope_name="auckland_central",
+        scraper=scrape(
+            replace(
+                _matching_listing(),
+                content_hash="returned-changed",
+                end_date=date(2026, 8, 23),
+            )
+        ),
+        alert_filters=(definition,),
+    )
+
+    with postgres_connection.cursor() as cursor:
+        cursor.execute(
+            """
+            select event_type, appearance_sequence
+            from alert_events
+            order by id
+            """
+        )
+        events = cursor.fetchall()
+
+    assert events == [
+        {"event_type": "first_match", "appearance_sequence": 1},
+        {"event_type": "confirmed_reappearance", "appearance_sequence": 2},
+    ]
+
+
+@pytest.mark.integration
+def test_broad_successful_scrape_does_not_alert_for_listing_outside_filter_area(
+    postgres_connection,
+) -> None:
+    definition = _matching_alert_filter()
+
+    def fake_scraper(site_filter, *, max_pages):
+        return ScrapeResult(
+            search_url="https://example.test/search",
+            pages_fetched=1,
+            listings=(replace(_matching_listing(), subregion="North Shore City"),),
+        )
+
+    scrape_and_store_scope_with_connection(
+        postgres_connection,
+        scope_name="all_nz",
+        scraper=fake_scraper,
+        alert_filters=(definition,),
+    )
+
+    with postgres_connection.cursor() as cursor:
+        cursor.execute("select count(*) as event_count from alert_events")
+        event_count = cursor.fetchone()["event_count"]
+
+    assert event_count == 0
 
 
 @pytest.mark.integration
@@ -1150,4 +1342,73 @@ def _listing(
         title=title,
         intro="Looking for someone to look after one dog.",
         url=url,
+    )
+
+
+def _matching_alert_filter() -> AlertFilterDefinition:
+    return AlertFilterDefinition(
+        name="workflow event filter",
+        enabled=True,
+        site_filter={
+            "state": "north-island",
+            "region": "auckland",
+            "subregion": "auckland-central",
+        },
+        local_filter={
+            "date_window_match": "contained",
+            "start_date_on_or_after": "2026-08-01",
+            "end_date_on_or_before": "2026-11-30",
+            "min_duration_days": 8,
+            "max_duration_days": None,
+            "allowed_islands": None,
+            "allowed_regions": None,
+            "allowed_subregions": None,
+            "max_total_animals": None,
+            "max_dogs": 2,
+            "dogs_allowed": True,
+            "cats_allowed": False,
+            "fish_allowed": False,
+            "birds_allowed": False,
+            "rabbits_guinea_pigs_allowed": False,
+            "chickens_ducks_geese_allowed": False,
+            "farm_animals_allowed": False,
+            "horses_allowed": False,
+            "reptiles_allowed": False,
+            "other_pets_allowed": False,
+            "no_pets_allowed": False,
+            "min_reply_rating_score": None,
+            "allowed_house_types": None,
+            "excluded_house_types": [],
+            "include_keywords": [],
+            "exclude_keywords": [],
+        },
+        delivery=AlertDelivery(
+            channels=("telegram", "email"),
+            quiet_hours=AlertQuietHours(
+                timezone="Pacific/Auckland",
+                start=time(0),
+                end=time(6),
+            ),
+        ),
+    )
+
+
+def _matching_listing() -> Listing:
+    return Listing(
+        external_id="matching-listing",
+        content_hash="matching-v1",
+        island="North Island",
+        region="Auckland",
+        subregion="Auckland - Central",
+        city="Stonefields",
+        duration_days=21,
+        start_date=date(2026, 8, 1),
+        end_date=date(2026, 8, 22),
+        house_type="Duplex",
+        total_animals=1,
+        dogs_count=1,
+        reply_rating_score=10,
+        title="Central sit",
+        intro="Pet care required.",
+        url="https://example.test/listing/matching-listing",
     )

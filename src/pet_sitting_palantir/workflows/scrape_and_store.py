@@ -6,6 +6,7 @@ from typing import Any, Protocol
 
 from psycopg import Connection
 
+from pet_sitting_palantir.alerts import AlertFilterDefinition, create_alert_events
 from pet_sitting_palantir.kiwihousesitters.constants import DEFAULT_MAX_PAGES
 from pet_sitting_palantir.kiwihousesitters.scraper import ScrapeResult, scrape_scope
 from pet_sitting_palantir.kiwihousesitters.search_filters import build_search_request
@@ -78,6 +79,7 @@ def scrape_and_store_scope_with_connection(
     scope_name: str,
     max_pages: int | None = DEFAULT_MAX_PAGES,
     scraper: Scraper = scrape_scope,
+    alert_filters: tuple[AlertFilterDefinition, ...] | None = None,
 ) -> StoredScrapeResult:
     """Scrape one enabled scope using an existing database connection."""
     scope = read_enabled_scrape_scope(connection, name=scope_name)
@@ -123,6 +125,12 @@ def scrape_and_store_scope_with_connection(
             listings=records,
             run_id=run_id,
             first_seen_context="baseline" if scope.last_success_at is None else "observed",
+        )
+        create_alert_events(
+            connection,
+            observations=zip(records, summary.results, strict=True),
+            run_id=run_id,
+            filter_definitions=alert_filters,
         )
         missing_marked = (
             0
