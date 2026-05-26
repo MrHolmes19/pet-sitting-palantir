@@ -1,101 +1,89 @@
 # Alerts
 
-## Alert Channel
+## Configuration Source
 
-Telegram is the v1 alert channel.
+Keep reusable values in `config/alert_filter_defaults.json` and named personal
+filter overrides in `config/alert_filters.json`. These are the human-maintained
+sources for filters and delivery policy; later alert-table synchronization
+should read from them rather than require manual SQL editing.
 
-Email is not planned for v1.
-
-## Alert Candidates
-
-A listing can become an alert candidate when:
-
-1. It is newly discovered.
-2. It already exists but its meaningful `content_hash` changed.
-3. It did not match before but now matches a filter because meaningful fields changed.
-
-Do not create alert candidates for silent volatile changes such as the site-provided `starts_soon` signal becoming true.
+Telegram is the first delivery channel, but filtering and alert-event decisions
+must be channel-independent.
 
 ## Filter Model
 
-Alert filters have two parts:
+Each configured alert filter contains:
 
-- `site_filter`: mirrors KiwiHouseSitters search constraints.
-- `local_filter`: personal matching rules applied after scraping.
+- `site_filter`: the listing geography covered by the alert, using the same
+  readable slugs as scrape scopes.
+- `local_filter`: overrides to matching defaults applied to normalized
+  listings.
+- Optional `delivery`: overrides to the default channels or quiet hours.
 
-Keep these separate. Site filters control what is searched. Local filters control what is worth notifying.
+Animal permissions are opt-in. Treat an omitted or false `*_allowed` flag as
+excluding listings with that animal category. This makes cat-only or similarly
+narrow filters straightforward.
 
-Example local filter fields:
+The defaults file must list every supported local-filter field with an explicit
+value. Use `null` to disable optional limits or allow-lists and empty arrays to
+disable keyword or exclusion rules. Local filter rules support year-specific
+date windows, `contained` or `overlaps` date-window interpretation, duration
+bounds, opt-in animal categories, animal count limits, response rating,
+dwelling type, and keyword rules. Keep concrete personal filter values in
+configuration files, not in agent-context documentation.
 
-- `min_duration_days`
-- `max_duration_days`
-- `max_dogs`
-- `allow_cats`
-- `allow_farm_animals`
-- `exclude_keywords`
+## Scope Evaluation
 
-## Matching Rules
+Alert filters are not attached to scrape scope rows. Evaluate a candidate
+listing against every enabled filter after a successful complete scrape,
+regardless of whether the listing arrived from the exact filter area or a
+broader containing scrape.
 
-To send an alert:
+For example, a narrow Auckland Central alert filter may match a listing
+observed during `auckland_region`, `north_island`, or `all_nz`. Listings
+outside that configured geography cannot trigger it.
 
-```text
-listing is alert candidate
-and listing is covered by alert_filter.site_filter
-and listing matches alert_filter.local_filter
-and no successful alert exists for listing + filter + channel + content_hash
-```
+## Alert Candidates And Repeats
 
-The dedupe key should include `content_hash_at_alert` so meaningful changes can alert again. Since the site-provided `starts_soon` is excluded from the hash, this signal should not cause duplicate alerts.
+Generate an alert candidate when:
 
-## Do Not Alert When
+1. A new listing matches an enabled filter, including a matching listing first
+   observed as part of a baseline run.
+2. A previously notified active listing has an alert-relevant material change:
+   location, dates or duration, or animal counts.
+3. A listing previously marked `missing_confirmed` reappears, still matches,
+   and differs from the last notified alert-relevant version.
 
-- The listing does not match local filters.
-- The listing only changed in volatile fields.
-- A successful sent alert already exists for the same listing, filter, channel, and content hash.
-- The listing came from a broad scope but does not match any enabled alert filter.
+Do not alert for display-only changes such as `starts_soon`, title, intro,
+listing tag, response rating, or house-type changes. The current general
+`content_hash` includes some of those fields, so delivery deduplication must
+eventually use a narrower alert-relevant fingerprint rather than
+`content_hash` alone. This comparison uses already parsed fields and requires
+no detail-page request.
 
-## Telegram Message Shape
+Do not treat `missing_once` followed by another observation as a reappearance;
+only `missing_confirmed` is sufficient evidence that a listing went offline.
 
-Keep messages compact and decision-oriented.
+## Delivery Boundary
 
-Example:
-
-```text
-New sit matched: cat-signal in auckland central
-
-Location: Grey Lynn, Auckland
-Dates: 12 Jun - 28 Jun
-Duration: 16 nights
-Dogs: 0
-Cats: 1
-Home: House
-
-https://www.kiwihousesitters.co.nz/...
-```
-
-Emoji can be added later if desired, but plain text is easier to test.
-
-## Telegram Failure Handling
-
-Preferred behavior:
+Keep alert decisions separate from notification providers:
 
 ```text
-if send succeeds:
-    insert sent_alerts status = sent
-
-if send fails:
-    insert or update sent_alerts status = failed
-    store error_message
-    increment attempt_count
-    retry in a later run
+candidate transition -> filter matcher -> alert event -> delivery attempt
+                                          -> Telegram sender
+                                          -> future email/WhatsApp sender
 ```
 
-Minimal acceptable v1 behavior:
+One semantic alert event may have delivery attempts through multiple channels.
+Persist the event before sending so a provider success is not lost if later
+database work fails.
 
-```text
-if send fails:
-    log failure
-    do not insert a successful sent alert
-```
+The existing `sent_alerts` placeholder schema deduplicates by full
+`content_hash`; revise its delivery/event contract before implementing sends.
 
-Do not mark a failed Telegram send as successfully sent.
+## Quiet Hours
+
+Each alert filter owns delivery quiet hours. These may align with the scrape
+pause or use a different interval. When delivery is implemented, a qualifying
+event during delivery quiet hours must be retained for delivery after the
+window instead of discarded.

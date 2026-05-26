@@ -246,22 +246,47 @@ Example:
 
 ```json
 {
-  "name": "Auckland Central good sits",
+  "name": "Auckland Central sample rule",
   "site_filter": {
     "state": "north-island",
     "region": "auckland",
     "subregion": "auckland-central"
   },
   "local_filter": {
+    "date_window_match": "contained",
+    "start_date_on_or_after": "2027-06-01",
+    "end_date_on_or_before": "2027-08-31",
     "min_duration_days": 7,
     "max_duration_days": 45,
+    "allowed_islands": ["North Island"],
+    "allowed_regions": ["Auckland"],
+    "allowed_subregions": ["Auckland - Central"],
+    "max_total_animals": 3,
     "max_dogs": 2,
-    "allow_cats": true,
-    "allow_farm_animals": false,
-    "exclude_keywords": ["farm", "own transport required"]
+    "dogs_allowed": true,
+    "cats_allowed": true,
+    "fish_allowed": false,
+    "birds_allowed": false,
+    "rabbits_guinea_pigs_allowed": false,
+    "chickens_ducks_geese_allowed": false,
+    "farm_animals_allowed": false,
+    "horses_allowed": false,
+    "reptiles_allowed": false,
+    "other_pets_allowed": false,
+    "no_pets_allowed": false,
+    "min_reply_rating_score": 5,
+    "allowed_house_types": ["House", "Unit", "Flat"],
+    "excluded_house_types": ["Farm House"],
+    "include_keywords": ["wifi"],
+    "exclude_keywords": ["rural", "own transport required"]
   }
 }
 ```
+
+Editable filter defaults live in `config/alert_filter_defaults.json`, and named
+filter overrides live in `config/alert_filters.json`; a later synchronization
+step will populate the table from the merged definitions. The JSON above
+illustrates supported fields, not a permanent personal filter.
 
 ## `sent_alerts`
 
@@ -290,7 +315,11 @@ create table sent_alerts (
 );
 ```
 
-Using `content_hash_at_alert` allows a meaningful listing change, such as changed dates or pet counts, to trigger a new alert. Since `starts_soon` is excluded from `content_hash`, the site-provided `Starts soon` signal should not cause noisy duplicate alerts.
+This is the existing placeholder delivery-record shape. Before alert delivery
+is implemented, revise it to represent channel-neutral alert events plus
+per-channel delivery attempts. Repeat notifications must use an alert-relevant
+fingerprint limited to location, dates/duration, and animal data rather than
+the full listing `content_hash`.
 
 Suggested indexes:
 

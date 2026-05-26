@@ -145,6 +145,11 @@ Initial scope seed data lives in `supabase/seed.sql`.
 
 Database record contracts are documented in `docs/contracts`.
 
+Editable alert defaults live in `config/alert_filter_defaults.json`, which
+lists every supported matching option and delivery default. Named filters in
+`config/alert_filters.json` override those defaults and provide their own
+geography.
+
 Listings first discovered during a scope's first successful scrape are stored
 with `first_seen_context = 'baseline'`. They may have existed before this
 system started watching, so lifetime analytics should normally use

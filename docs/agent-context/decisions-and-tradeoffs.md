@@ -17,6 +17,16 @@ Notification value is highest for Auckland Central. North Shore City, inside the
 
 Decision: optimize alerting around Auckland Central first, then North Shore City. Broader scopes such as North Island and All New Zealand are mainly for history collection, market visibility, and future behavior analysis.
 
+## Alert Configuration
+
+Decision: keep human-edited defaults in `config/alert_filter_defaults.json`
+and named alert overrides in `config/alert_filters.json`. Each custom filter
+must supply its geography; it inherits local and delivery settings from the
+complete defaults template. Alert filters describe matching geography
+independently of scrape scopes, so a broader complete scrape can still trigger
+a narrower matching filter. Delivery settings are filter-owned and
+channel-neutral; Telegram is only the first sender implementation.
+
 ## Capture Before Analytics
 
 The system will eventually support analytics, but analytics are only useful if the underlying capture is reliable.

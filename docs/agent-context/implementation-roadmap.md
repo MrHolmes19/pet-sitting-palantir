@@ -69,10 +69,12 @@ Goal: notify when listings match personal filters.
 
 Deliverables:
 
+- Editable `config/alert_filters.json` filter and delivery configuration.
 - Local filter matcher.
-- Telegram sender.
-- `sent_alerts` insert/update logic.
-- Duplicate prevention using `content_hash_at_alert`.
+- Channel-neutral alert event and delivery tracking.
+- Telegram sender behind a notification-provider interface.
+- Duplicate prevention using an alert-relevant fingerprint limited to
+  location, dates/duration, and animal fields.
 
 ## Phase 6 - Home-Hosted Scheduled Production Run
 
