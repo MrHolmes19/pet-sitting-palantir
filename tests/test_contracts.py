@@ -15,7 +15,8 @@ TABLE_CONTRACTS = {
     "scrape_runs": CONTRACTS_DIR / "scrape_runs.schema.json",
     "listings": CONTRACTS_DIR / "listings.schema.json",
     "alert_filters": CONTRACTS_DIR / "alert_filters.schema.json",
-    "sent_alerts": CONTRACTS_DIR / "sent_alerts.schema.json",
+    "alert_events": CONTRACTS_DIR / "alert_events.schema.json",
+    "alert_delivery_attempts": CONTRACTS_DIR / "alert_delivery_attempts.schema.json",
 }
 
 ALL_CONTRACTS = tuple(sorted(CONTRACTS_DIR.glob("*.schema.json")))

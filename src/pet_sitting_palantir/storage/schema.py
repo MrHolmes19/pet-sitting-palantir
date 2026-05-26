@@ -6,9 +6,9 @@ from typing import Any
 
 from psycopg import Connection
 
-INITIAL_SCHEMA = Path(__file__).parents[3] / "supabase" / "migrations" / (
-    "20260503000100_initial_schema.sql"
-)
+MIGRATIONS_DIR = Path(__file__).parents[3] / "supabase" / "migrations"
+INITIAL_SCHEMA = MIGRATIONS_DIR / "20260503000100_initial_schema.sql"
+ALERT_EVENTS_MIGRATION = MIGRATIONS_DIR / "20260526000100_alert_events_and_delivery_attempts.sql"
 SEED_SQL = Path(__file__).parents[3] / "supabase" / "seed.sql"
 
 
@@ -25,10 +25,10 @@ class DatabaseInitResult:
 
 
 def initialize_database(connection: Connection) -> DatabaseInitResult:
-    """Apply the initial schema if missing, then seed empty scope tables."""
-    schema_exists = _schema_exists(connection)
-    if not schema_exists:
-        _execute_sql_file(connection, INITIAL_SCHEMA)
+    """Apply pending schema migrations, then seed empty scope tables."""
+    _ensure_migration_history_table(connection)
+    _bootstrap_pre_history_schema(connection)
+    schema_applied = _apply_pending_migrations(connection)
 
     seed_applied = _seed_required(connection)
     if seed_applied:
@@ -37,7 +37,7 @@ def initialize_database(connection: Connection) -> DatabaseInitResult:
     _commit_if_transactional(connection)
 
     return DatabaseInitResult(
-        schema_applied=not schema_exists,
+        schema_applied=schema_applied,
         seed_applied=seed_applied,
     )
 
@@ -60,6 +60,69 @@ def _schema_exists(connection: Connection) -> bool:
 def _execute_sql_file(connection: Connection, path: Path) -> None:
     with connection.cursor() as cursor:
         cursor.execute(path.read_text())
+
+
+def _ensure_migration_history_table(connection: Connection) -> None:
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            create table if not exists schema_migrations (
+              filename text primary key,
+              applied_at timestamptz not null default now()
+            )
+            """
+        )
+
+
+def _bootstrap_pre_history_schema(connection: Connection) -> None:
+    if not _schema_exists(connection) or _applied_migration_names(connection):
+        return
+
+    _record_migration(connection, INITIAL_SCHEMA)
+    if _table_exists(connection, "alert_events"):
+        _record_migration(connection, ALERT_EVENTS_MIGRATION)
+
+
+def _apply_pending_migrations(connection: Connection) -> bool:
+    applied = _applied_migration_names(connection)
+    applied_new_migration = False
+    for migration in sorted(MIGRATIONS_DIR.glob("*.sql")):
+        if migration.name in applied:
+            continue
+        _execute_sql_file(connection, migration)
+        _record_migration(connection, migration)
+        applied_new_migration = True
+
+    return applied_new_migration
+
+
+def _applied_migration_names(connection: Connection) -> set[str]:
+    with connection.cursor() as cursor:
+        cursor.execute("select filename from schema_migrations")
+        return {row["filename"] for row in cursor.fetchall()}
+
+
+def _record_migration(connection: Connection, migration: Path) -> None:
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            insert into schema_migrations (filename)
+            values (%s)
+            on conflict (filename) do nothing
+            """,
+            (migration.name,),
+        )
+
+
+def _table_exists(connection: Connection, table_name: str) -> bool:
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            select to_regclass(%s) is not null as table_exists
+            """,
+            (table_name,),
+        )
+        return cursor.fetchone()["table_exists"]
 
 
 def _seed_required(connection: Connection) -> bool:

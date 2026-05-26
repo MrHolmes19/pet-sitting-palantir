@@ -70,11 +70,20 @@ class ListingRecord:
 
 @dataclass(frozen=True)
 class ListingUpsertResult:
-    """Outcome for one listing upsert."""
+    """Outcome and prior lifecycle state for one listing observation."""
 
     listing_id: int
+    external_id: str
     created: bool
     changed: bool
+    previous_status: str | None
+    previous_content_hash: str | None
+    appearance_sequence: int
+
+    @property
+    def confirmed_reappearance(self) -> bool:
+        """Return whether this observation reactivated a confirmed-missing listing."""
+        return self.previous_status == "missing_confirmed"
 
 
 @dataclass(frozen=True)
@@ -84,3 +93,4 @@ class ListingUpsertSummary:
     listings_seen: int
     new_listings: int
     changed_listings: int
+    results: tuple[ListingUpsertResult, ...]

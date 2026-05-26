@@ -78,8 +78,10 @@ One semantic alert event may have delivery attempts through multiple channels.
 Persist the event before sending so a provider success is not lost if later
 database work fails.
 
-The existing `sent_alerts` placeholder schema deduplicates by full
-`content_hash`; revise its delivery/event contract before implementing sends.
+`alert_events` deduplicates semantic decisions by listing, filter, confirmed
+appearance, and alert-relevant fingerprint. `alert_delivery_attempts` stores
+individual provider calls and permits failed retries while enforcing at most
+one successful attempt for an event/channel.
 
 ## Quiet Hours
 

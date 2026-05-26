@@ -228,12 +228,19 @@ def test_upserts_listing_by_external_id(postgres_connection) -> None:
 
     assert first_result.created is True
     assert first_result.changed is False
+    assert first_result.previous_status is None
+    assert first_result.appearance_sequence == 1
+    assert first_result.confirmed_reappearance is False
     assert same_result.listing_id == first_result.listing_id
     assert same_result.created is False
     assert same_result.changed is False
+    assert same_result.previous_status == "active"
+    assert same_result.appearance_sequence == 1
     assert changed_result.listing_id == first_result.listing_id
     assert changed_result.created is False
     assert changed_result.changed is True
+    assert changed_result.previous_content_hash == "hash-v1"
+    assert changed_result.appearance_sequence == 1
 
     with postgres_connection.cursor() as cursor:
         cursor.execute(
@@ -243,6 +250,7 @@ def test_upserts_listing_by_external_id(postgres_connection) -> None:
               title,
               status,
               missing_count,
+              appearance_sequence,
               first_seen_run_id,
               last_seen_run_id,
               first_seen_context
@@ -257,6 +265,7 @@ def test_upserts_listing_by_external_id(postgres_connection) -> None:
     assert row["title"] == "Updated title"
     assert row["status"] == "active"
     assert row["missing_count"] == 0
+    assert row["appearance_sequence"] == 1
     assert row["first_seen_run_id"] == run_id
     assert row["last_seen_run_id"] == run_id
     assert row["first_seen_context"] == "observed"
@@ -291,6 +300,7 @@ def test_upsert_listings_returns_run_counts(postgres_connection) -> None:
     assert summary.listings_seen == 2
     assert summary.new_listings == 1
     assert summary.changed_listings == 1
+    assert [result.external_id for result in summary.results] == ["614587", "614588"]
 
 
 @pytest.mark.integration
@@ -315,6 +325,100 @@ def test_upsert_listing_rejects_incomplete_listing(postgres_connection) -> None:
             listing=listing_record_from_scraped_listing(_listing(url=None)),
             run_id=run_id,
         )
+
+
+@pytest.mark.integration
+def test_alert_events_and_delivery_attempts_enforce_event_and_success_deduplication(
+    postgres_connection,
+) -> None:
+    run_id = create_scrape_run(
+        postgres_connection,
+        scope_id=None,
+        scope_name="manual_alert_event",
+    )
+    listing_result = upsert_listing(
+        postgres_connection,
+        listing=listing_record_from_scraped_listing(_listing(external_id="alert-record")),
+        run_id=run_id,
+    )
+
+    with postgres_connection.cursor() as cursor:
+        cursor.execute(
+            """
+            insert into alert_filters (name, site_filter, local_filter)
+            values ('sample filter', '{}'::jsonb, '{}'::jsonb)
+            returning id
+            """
+        )
+        filter_id = cursor.fetchone()["id"]
+        cursor.execute(
+            """
+            insert into alert_events (
+              listing_id,
+              filter_id,
+              detected_run_id,
+              event_type,
+              appearance_sequence,
+              alert_fingerprint,
+              listing_content_hash,
+              target_channels
+            )
+            values (%s, %s, %s, 'first_match', 1, 'fingerprint-v1', 'hash-v1', %s)
+            returning id
+            """,
+            (listing_result.listing_id, filter_id, run_id, ["telegram"]),
+        )
+        alert_event_id = cursor.fetchone()["id"]
+
+    with pytest.raises(psycopg.errors.UniqueViolation):
+        with postgres_connection.cursor() as cursor:
+            cursor.execute(
+                """
+                insert into alert_events (
+                  listing_id,
+                  filter_id,
+                  detected_run_id,
+                  event_type,
+                  appearance_sequence,
+                  alert_fingerprint,
+                  listing_content_hash,
+                  target_channels
+                )
+                values (%s, %s, %s, 'material_change', 1, 'fingerprint-v1', 'hash-v1', %s)
+                """,
+                (listing_result.listing_id, filter_id, run_id, ["telegram"]),
+            )
+
+    with postgres_connection.cursor() as cursor:
+        cursor.execute(
+            """
+            insert into alert_delivery_attempts (
+              alert_event_id,
+              channel,
+              status,
+              error_message
+            )
+            values (%s, 'telegram', 'failed', 'offline')
+            """,
+            (alert_event_id,),
+        )
+        cursor.execute(
+            """
+            insert into alert_delivery_attempts (alert_event_id, channel, status)
+            values (%s, 'telegram', 'sent')
+            """,
+            (alert_event_id,),
+        )
+
+    with pytest.raises(psycopg.errors.UniqueViolation):
+        with postgres_connection.cursor() as cursor:
+            cursor.execute(
+                """
+                insert into alert_delivery_attempts (alert_event_id, channel, status)
+                values (%s, 'telegram', 'sent')
+                """,
+                (alert_event_id,),
+            )
 
 
 @pytest.mark.integration
@@ -583,6 +687,90 @@ def test_missing_listing_reaching_threshold_becomes_missing_confirmed(
     assert row["status"] == "missing_confirmed"
     assert row["missing_count"] == 6
     assert row["closed_at"] is not None
+
+
+@pytest.mark.integration
+def test_upsert_listing_reports_confirmed_reappearance_and_increments_sequence(
+    postgres_connection,
+) -> None:
+    run_id = create_scrape_run(
+        postgres_connection,
+        scope_id=None,
+        scope_name="manual_seed",
+    )
+    listing = listing_record_from_scraped_listing(_listing(external_id="reappearing"))
+    upsert_listing(postgres_connection, listing=listing, run_id=run_id)
+    with postgres_connection.cursor() as cursor:
+        cursor.execute(
+            """
+            update listings
+            set status = 'missing_confirmed',
+                missing_count = 6,
+                missing_since = now(),
+                closed_at = now()
+            where external_id = 'reappearing'
+            """
+        )
+
+    reappeared = upsert_listing(
+        postgres_connection,
+        listing=listing_record_from_scraped_listing(
+            _listing(external_id="reappearing", content_hash="hash-returned")
+        ),
+        run_id=run_id,
+    )
+
+    assert reappeared.previous_status == "missing_confirmed"
+    assert reappeared.previous_content_hash == "hash-v1"
+    assert reappeared.changed is True
+    assert reappeared.confirmed_reappearance is True
+    assert reappeared.appearance_sequence == 2
+
+    with postgres_connection.cursor() as cursor:
+        cursor.execute(
+            """
+            select status, missing_count, closed_at, appearance_sequence
+            from listings
+            where external_id = 'reappearing'
+            """
+        )
+        row = cursor.fetchone()
+
+    assert row == {
+        "status": "active",
+        "missing_count": 0,
+        "closed_at": None,
+        "appearance_sequence": 2,
+    }
+
+
+@pytest.mark.integration
+def test_upsert_listing_does_not_increment_sequence_after_missing_once(
+    postgres_connection,
+) -> None:
+    run_id = create_scrape_run(
+        postgres_connection,
+        scope_id=None,
+        scope_name="manual_seed",
+    )
+    listing = listing_record_from_scraped_listing(_listing(external_id="transiently-missing"))
+    upsert_listing(postgres_connection, listing=listing, run_id=run_id)
+    with postgres_connection.cursor() as cursor:
+        cursor.execute(
+            """
+            update listings
+            set status = 'missing_once',
+                missing_count = 1,
+                missing_since = now()
+            where external_id = 'transiently-missing'
+            """
+        )
+
+    observed = upsert_listing(postgres_connection, listing=listing, run_id=run_id)
+
+    assert observed.previous_status == "missing_once"
+    assert observed.confirmed_reappearance is False
+    assert observed.appearance_sequence == 1
 
 
 @pytest.mark.integration

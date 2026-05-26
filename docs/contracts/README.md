@@ -11,3 +11,6 @@ Each contract describes:
 - examples
 
 Shared nested JSONB structures, such as `site_filter` and `local_filter`, live in their own schema files and are referenced by table contracts.
+
+Alert persistence is separated into channel-independent `alert_events` and
+one-row-per-provider-call `alert_delivery_attempts`.

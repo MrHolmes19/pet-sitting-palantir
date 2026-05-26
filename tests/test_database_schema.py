@@ -23,7 +23,7 @@ def test_initial_schema_migration_exists() -> None:
     assert INITIAL_SCHEMA.exists()
 
 
-def test_initial_schema_creates_expected_tables() -> None:
+def test_migrations_create_current_tables_and_replace_placeholder_delivery_table() -> None:
     sql = _migration_sql()
 
     for table_name in (
@@ -31,9 +31,12 @@ def test_initial_schema_creates_expected_tables() -> None:
         "scrape_runs",
         "listings",
         "alert_filters",
-        "sent_alerts",
+        "alert_events",
+        "alert_delivery_attempts",
     ):
         assert f"create table {table_name}" in sql
+
+    assert "drop table sent_alerts" in sql
 
 
 def test_listings_schema_matches_persistence_decision() -> None:
@@ -47,6 +50,7 @@ def test_listings_schema_matches_persistence_decision() -> None:
     assert "city text" in sql
     assert "total_animals int not null default 0" in sql
     assert "reply_rating_score int" in sql
+    assert "add column appearance_sequence int not null default 1" in sql
 
     assert "raw_data" not in sql
     assert "pets_raw" not in sql
@@ -98,12 +102,15 @@ def test_schema_has_core_constraints_and_indexes() -> None:
         "constraint listings_total_animals_non_negative check (total_animals >= 0)",
         "reply_rating_score is null or reply_rating_score between 0 and 10",
         "first_seen_context in ('baseline', 'observed')",
-        "constraint sent_alerts_unique_listing_filter_channel_hash unique",
+        "constraint listings_appearance_sequence_positive",
+        "constraint alert_events_unique_listing_filter_appearance_fingerprint unique",
+        "constraint alert_delivery_attempts_status_check check (status in ('sent', 'failed'))",
         "create index scrape_scopes_enabled_due_idx",
         "create index scrape_runs_scope_started_idx",
         "create index listings_location_idx",
         "create index listings_start_date_idx",
-        "create index sent_alerts_filter_sent_idx",
+        "create index alert_events_delivery_due_idx",
+        "create unique index alert_delivery_attempts_unique_success_idx",
     )
 
     for fragment in expected_fragments:

@@ -140,6 +140,8 @@ uv run python -m pet_sitting_palantir --scope auckland_central --max-pages 1 --p
 ## Database
 
 Schema SQL lives in `supabase/migrations`.
+Database initialization applies pending migrations before seeding configuration
+rows.
 
 Initial scope seed data lives in `supabase/seed.sql`.
 

@@ -58,7 +58,7 @@ def upsert_listing(
     with connection.cursor() as cursor:
         cursor.execute(
             """
-            select id, content_hash
+            select id, content_hash, status, appearance_sequence
             from listings
             where external_id = %s
             for update
@@ -83,14 +83,19 @@ def upsert_listing(
                   %s,
                   %s
                 )
-                returning id
+                returning id, appearance_sequence
                 """,
                 (*values, run_id, run_id, first_seen_context),
             )
+            inserted = cursor.fetchone()
             return ListingUpsertResult(
-                listing_id=cursor.fetchone()["id"],
+                listing_id=inserted["id"],
+                external_id=listing.external_id,
                 created=True,
                 changed=False,
+                previous_status=None,
+                previous_content_hash=None,
+                appearance_sequence=inserted["appearance_sequence"],
             )
 
         changed = existing["content_hash"] != listing.content_hash
@@ -105,15 +110,25 @@ def upsert_listing(
               status = 'active',
               missing_count = 0,
               missing_since = null,
-              closed_at = null
+              closed_at = null,
+              appearance_sequence = case
+                when status = 'missing_confirmed' then appearance_sequence + 1
+                else appearance_sequence
+              end
             where id = %s
+            returning appearance_sequence
             """,
             (*values[1:], run_id, existing["id"]),
         )
+        updated = cursor.fetchone()
         return ListingUpsertResult(
             listing_id=existing["id"],
+            external_id=listing.external_id,
             created=False,
             changed=changed,
+            previous_status=existing["status"],
+            previous_content_hash=existing["content_hash"],
+            appearance_sequence=updated["appearance_sequence"],
         )
 
 
@@ -128,6 +143,7 @@ def upsert_listings(
     seen = 0
     created = 0
     changed = 0
+    results: list[ListingUpsertResult] = []
 
     for listing in listings:
         seen += 1
@@ -137,6 +153,7 @@ def upsert_listings(
             run_id=run_id,
             first_seen_context=first_seen_context,
         )
+        results.append(result)
         created += int(result.created)
         changed += int(result.changed)
 
@@ -144,6 +161,7 @@ def upsert_listings(
         listings_seen=seen,
         new_listings=created,
         changed_listings=changed,
+        results=tuple(results),
     )
 
 
