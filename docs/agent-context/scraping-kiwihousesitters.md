@@ -93,7 +93,9 @@ while url:
 
 Important: do not try to create `searchid` manually. Start from the first page every time and follow the site's own pagination links.
 
-Production scheduled scraping should use `--max-pages all` so each due scope follows pagination until the site stops exposing a next page. Local runs may pass a numeric `--max-pages` to limit site load while testing.
+Persisted scraping must use `--max-pages all` so missing-listing lifecycle
+updates are based on complete scope coverage. Non-persisting local inspection
+runs may pass a numeric `--max-pages` to limit site load while testing.
 
 The client applies the minimum request delay defined in
 `src/pet_sitting_palantir/settings.py`. The selected production value is `0.5`

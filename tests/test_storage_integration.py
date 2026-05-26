@@ -431,7 +431,7 @@ def test_scrape_and_store_scope_persists_scraper_result(postgres_connection) -> 
             "region": "auckland",
             "subregion": "auckland-central",
         }
-        assert max_pages == 1
+        assert max_pages is None
         return ScrapeResult(
             search_url="https://example.test/search",
             pages_fetched=1,
@@ -441,7 +441,7 @@ def test_scrape_and_store_scope_persists_scraper_result(postgres_connection) -> 
     result = scrape_and_store_scope_with_connection(
         postgres_connection,
         scope_name="auckland_central",
-        max_pages=1,
+        max_pages=None,
         scraper=fake_scraper,
     )
 
@@ -503,6 +503,32 @@ def test_scrape_and_store_scope_persists_scraper_result(postgres_connection) -> 
 
 
 @pytest.mark.integration
+def test_scrape_and_store_scope_rejects_bounded_persistence_before_scraping(
+    postgres_connection,
+) -> None:
+    scraped = False
+
+    def fake_scraper(site_filter, *, max_pages):
+        nonlocal scraped
+        scraped = True
+        return ScrapeResult(
+            search_url="https://example.test/search",
+            pages_fetched=1,
+            listings=(_listing(),),
+        )
+
+    with pytest.raises(ValueError, match="require --max-pages all"):
+        scrape_and_store_scope_with_connection(
+            postgres_connection,
+            scope_name="auckland_central",
+            max_pages=1,
+            scraper=fake_scraper,
+        )
+
+    assert scraped is False
+
+
+@pytest.mark.integration
 def test_successful_scrape_synchronizes_filter_and_creates_vendor_neutral_event(
     postgres_connection,
 ) -> None:
@@ -551,6 +577,8 @@ def test_successful_scrape_synchronizes_filter_and_creates_vendor_neutral_event(
         "listing_content_hash": "matching-v1",
         "delivery_attempts": 0,
     }
+    assert result.alert_events[0].filter_name == definition.name
+    assert result.alert_events[0].listing_external_id == "matching-listing"
 
 
 @pytest.mark.integration
@@ -1080,7 +1108,7 @@ def test_run_due_scrape_scopes_runs_only_due_scopes(postgres_connection) -> None
             "region": "auckland",
             "subregion": "auckland-central",
         }
-        assert max_pages == 1
+        assert max_pages is None
         return ScrapeResult(
             search_url="https://example.test/search",
             pages_fetched=1,
@@ -1089,7 +1117,7 @@ def test_run_due_scrape_scopes_runs_only_due_scopes(postgres_connection) -> None
 
     result = run_due_scrape_scopes_with_connection(
         postgres_connection,
-        max_pages=1,
+        max_pages=None,
         scraper=fake_scraper,
     )
 
@@ -1133,7 +1161,7 @@ def test_run_due_scrape_scopes_runs_only_broadest_scope_on_fresh_database(
 
     result = run_due_scrape_scopes_with_connection(
         postgres_connection,
-        max_pages=1,
+        max_pages=None,
         scraper=fake_scraper,
     )
 
@@ -1199,7 +1227,7 @@ def test_run_due_scrape_scopes_skips_due_subregions_when_region_is_due(
 
     result = run_due_scrape_scopes_with_connection(
         postgres_connection,
-        max_pages=1,
+        max_pages=None,
         scraper=fake_scraper,
     )
 
@@ -1243,7 +1271,7 @@ def test_run_due_scrape_scopes_catches_up_region_without_rescheduling_island(
 
     result = run_due_scrape_scopes_with_connection(
         postgres_connection,
-        max_pages=1,
+        max_pages=None,
         scraper=fake_scraper,
     )
 
@@ -1319,8 +1347,8 @@ def _listing(
     content_hash: str = "hash-v1",
     title: str = "Stonefields Auckland - Auckland - Auckland - Central",
     subregion: str = "Auckland - Central",
-    start_date: date = date(2026, 5, 5),
-    end_date: date = date(2026, 5, 11),
+    start_date: date = date(2027, 5, 5),
+    end_date: date = date(2027, 5, 11),
     url: str | None = "https://example.test/listing/614587",
 ) -> Listing:
     return Listing(

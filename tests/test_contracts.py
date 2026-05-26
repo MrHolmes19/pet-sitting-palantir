@@ -53,7 +53,8 @@ def _table_columns(table_name: str) -> set[str]:
             columns.add(column_match.group(1))
 
     alter_column_matches = re.findall(
-        rf"alter table (?:public\.)?{table_name}\s+add column\s+([a-z_]+)\s+",
+        rf"alter table (?:public\.)?{table_name}\s+"
+        r"add column\s+(?:if not exists\s+)?([a-z_]+)\s+",
         _migration_sql(),
         flags=re.IGNORECASE,
     )

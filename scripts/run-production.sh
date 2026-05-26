@@ -10,6 +10,9 @@ cd "${REPO_ROOT}"
 source "${SCRIPT_DIR}/production-postgres-env.sh"
 load_production_database_url
 
+echo "Applying pending production database migrations." >&2
+uv --cache-dir .uv-cache run python -m pet_sitting_palantir --init-db --pretty
+
 echo "Starting the production home runner. Press Ctrl+C to stop it." >&2
 exec uv --cache-dir .uv-cache run python -m pet_sitting_palantir \
   --run-continuously \

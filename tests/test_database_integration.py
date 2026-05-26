@@ -131,6 +131,7 @@ def test_initialize_database_applies_schema_and_seed_to_real_postgres() -> None:
                 assert migrations == [
                     "20260503000100_initial_schema.sql",
                     "20260526000100_alert_events_and_delivery_attempts.sql",
+                    "20260526000200_add_first_seen_context_for_existing_databases.sql",
                 ]
             finally:
                 cursor.execute(
@@ -181,7 +182,75 @@ def test_initialize_database_upgrades_schema_created_before_migration_history() 
                 assert migrations == [
                     "20260503000100_initial_schema.sql",
                     "20260526000100_alert_events_and_delivery_attempts.sql",
+                    "20260526000200_add_first_seen_context_for_existing_databases.sql",
                 ]
+            finally:
+                cursor.execute(
+                    sql.SQL("drop schema {} cascade").format(sql.Identifier(schema_name))
+                )
+
+
+@pytest.mark.integration
+def test_initialize_database_repairs_schema_created_before_first_seen_context() -> None:
+    if psycopg is None:
+        pytest.skip("psycopg is not installed")
+
+    database_url = _database_url()
+    if not database_url:
+        pytest.skip("Set TEST_DATABASE_URL or DATABASE_URL to run this integration test")
+
+    schema_name = f"test_schema_{uuid4().hex}"
+    initial_sql = (MIGRATIONS_DIR / "20260503000100_initial_schema.sql").read_text()
+    pre_context_sql = initial_sql.replace(
+        "  first_seen_context text not null default 'observed',\n",
+        "",
+    ).replace(
+        "  constraint listings_first_seen_context_check check (\n"
+        "    first_seen_context in ('baseline', 'observed')\n"
+        "  ),\n",
+        "",
+    )
+
+    with psycopg.connect(database_url, autocommit=True, row_factory=dict_row) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(sql.SQL("create schema {}").format(sql.Identifier(schema_name)))
+            cursor.execute(
+                sql.SQL("set search_path to {}, public").format(sql.Identifier(schema_name))
+            )
+
+            try:
+                cursor.execute(pre_context_sql)
+
+                result = initialize_database(connection)
+
+                cursor.execute(
+                    """
+                    select exists (
+                      select 1
+                      from information_schema.columns
+                      where table_schema = %s
+                        and table_name = 'listings'
+                        and column_name = 'first_seen_context'
+                    ) as exists
+                    """,
+                    (schema_name,),
+                )
+                context_column_exists = cursor.fetchone()["exists"]
+                cursor.execute(
+                    """
+                    select constraint_name
+                    from information_schema.table_constraints
+                    where table_schema = %s
+                      and table_name = 'listings'
+                      and constraint_name = 'listings_first_seen_context_check'
+                    """,
+                    (schema_name,),
+                )
+                context_constraint = cursor.fetchone()
+
+                assert result.schema_applied is True
+                assert context_column_exists is True
+                assert context_constraint is not None
             finally:
                 cursor.execute(
                     sql.SQL("drop schema {} cascade").format(sql.Identifier(schema_name))

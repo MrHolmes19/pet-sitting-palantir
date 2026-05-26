@@ -8,7 +8,6 @@ from os import getpid
 from pathlib import Path
 from time import sleep, time
 
-from pet_sitting_palantir.kiwihousesitters.constants import DEFAULT_MAX_PAGES
 from pet_sitting_palantir.settings import (
     HOME_RUNNER_LOCK_FILE,
     HOME_RUNNER_TICK_INTERVAL_SECONDS,
@@ -27,7 +26,7 @@ class RunnerAlreadyActiveError(RuntimeError):
 
 def run_home_runner(
     *,
-    max_pages: int | None = DEFAULT_MAX_PAGES,
+    max_pages: int | None = None,
     lock_file: Path = HOME_RUNNER_LOCK_FILE,
 ) -> None:
     """Run the production due-scope supervisor until interrupted."""
@@ -42,7 +41,7 @@ def run_home_runner(
 
 def _run_continuously(
     *,
-    max_pages: int | None = DEFAULT_MAX_PAGES,
+    max_pages: int | None = None,
     tick_interval_seconds: int = HOME_RUNNER_TICK_INTERVAL_SECONDS,
     due_scope_runner: DueScopeRunner = run_due_scrape_scopes,
     sleep_for: Callable[[float], None] = sleep,
@@ -97,14 +96,26 @@ def _run_tick(
         for stored_result in result.results:
             runtime_logger.info(
                 "scope_ok name=%s pages=%s "
-                "listings=%s new=%s changed=%s missing=%s",
+                "listings=%s new=%s changed=%s missing=%s alerts=%s",
                 stored_result.scope_name,
                 stored_result.pages_fetched,
                 stored_result.listings_seen,
                 stored_result.new_listings,
                 stored_result.changed_listings,
                 stored_result.missing_marked,
+                len(stored_result.alert_events),
             )
+            for event in stored_result.alert_events:
+                runtime_logger.info(
+                    "alert_preview filter=%s type=%s listing=%s channels=%s "
+                    "deliver_after=%s url=%s",
+                    event.filter_name,
+                    event.event_type,
+                    event.listing_external_id,
+                    ",".join(event.target_channels),
+                    event.deliver_after.isoformat(),
+                    event.listing_url,
+                )
         return
 
     runtime_logger.info("tick_ok status=%s", result.status)

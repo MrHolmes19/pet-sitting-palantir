@@ -9,6 +9,7 @@ from pet_sitting_palantir.kiwihousesitters.search_filters import (
 MIGRATIONS_DIR = Path(__file__).parents[1] / "supabase" / "migrations"
 SEED_FILE = Path(__file__).parents[1] / "supabase" / "seed.sql"
 INITIAL_SCHEMA = MIGRATIONS_DIR / "20260503000100_initial_schema.sql"
+PRODUCTION_RUN_SCRIPT = Path(__file__).parents[1] / "scripts" / "run-production.sh"
 
 
 def _migration_sql() -> str:
@@ -115,6 +116,22 @@ def test_schema_has_core_constraints_and_indexes() -> None:
 
     for fragment in expected_fragments:
         assert fragment in sql
+
+
+def test_migrations_repair_first_seen_context_for_existing_databases() -> None:
+    sql = _migration_sql()
+
+    assert "add column if not exists first_seen_context text not null default 'observed'" in sql
+    assert "conname = 'listings_first_seen_context_check'" in sql
+
+
+def test_production_runner_applies_pending_migrations_before_scraping() -> None:
+    script = PRODUCTION_RUN_SCRIPT.read_text()
+
+    migration_position = script.index("--init-db")
+    runner_position = script.index("--run-continuously")
+
+    assert migration_position < runner_position
 
 
 def test_seed_contains_initial_scrape_scopes() -> None:

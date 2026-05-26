@@ -118,7 +118,12 @@ def _table_exists(connection: Connection, table_name: str) -> bool:
     with connection.cursor() as cursor:
         cursor.execute(
             """
-            select to_regclass(%s) is not null as table_exists
+            select exists (
+              select 1
+              from information_schema.tables
+              where table_schema = current_schema()
+                and table_name = %s
+            ) as table_exists
             """,
             (table_name,),
         )

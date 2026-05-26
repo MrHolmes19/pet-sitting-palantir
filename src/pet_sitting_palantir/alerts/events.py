@@ -30,10 +30,12 @@ class CreatedAlertEvent:
 
     id: int
     listing_id: int
+    listing_external_id: str
     filter_name: str
     event_type: AlertEventType
-    alert_fingerprint: str
+    target_channels: tuple[str, ...]
     deliver_after: datetime
+    listing_url: str
 
 
 @dataclass(frozen=True)
@@ -266,8 +268,10 @@ def _insert_alert_event(
     return CreatedAlertEvent(
         id=inserted["id"],
         listing_id=outcome.listing_id,
+        listing_external_id=listing.external_id,
         filter_name=filter_name,
         event_type=event_type,
-        alert_fingerprint=fingerprint,
+        target_channels=target_channels,
         deliver_after=delivery_time,
+        listing_url=listing.url,
     )
