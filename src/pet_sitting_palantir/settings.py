@@ -29,6 +29,6 @@ HOME_RUNNER_LOCK_FILE = Path("/tmp/pet-sitting-palantir-home-runner.lock")
 # Time zone used to evaluate quiet hours, independent of the computer's local setting.
 NEW_ZEALAND_TIME_ZONE = ZoneInfo("Pacific/Auckland")
 # Beginning of the daily no-scraping window in New Zealand local time.
-QUIET_HOURS_START = time(hour=2)
+QUIET_HOURS_START = time(hour=0)
 # End of the daily no-scraping window in New Zealand local time.
 QUIET_HOURS_END = time(hour=6)
