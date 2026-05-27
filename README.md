@@ -149,6 +149,12 @@ lists every supported matching option and delivery default. Named filters in
 `config/alert_filters.json` override those defaults and provide their own
 geography.
 
+Matched listings create persisted alert events. The continuous home runner
+attempts due Telegram delivery after scraping in the same tick and retries a
+failed Telegram attempt on subsequent ticks without rerunning the scrape.
+Delivery eligibility is controlled by the alert filter's
+`delivery.quiet_hours` and is independent of scraper quiet hours.
+
 Listings first discovered during a scope's first successful scrape are stored
 with `first_seen_context = 'baseline'`. They may have existed before this
 system started watching, so lifetime analytics should normally use
@@ -211,6 +217,11 @@ connection string in a gitignored `.env.production` file:
 cp .env.production.example .env.production
 ```
 
+For private-chat Telegram notifications, create a bot with `@BotFather`,
+message the bot once from your Telegram account, get the private `chat.id`
+from the Bot API `getUpdates` response, and set `TELEGRAM_BOT_TOKEN` and
+`TELEGRAM_CHAT_ID` in that `.env.production` file.
+
 Use the interactive production maintenance scripts only when you mean it. They
 print a production warning and require a typed confirmation before connecting:
 
@@ -229,11 +240,19 @@ scripts/run-production.sh
 
 On startup, this command applies any pending SQL migrations to the configured
 production database, then runs due scopes immediately and checks again every 5
-minutes. If migration application fails, scraping does not start. Stop it with
+minutes. It also attempts any due Telegram delivery in each tick. If migration
+application fails, scraping does not start. Stop it with
 `Ctrl+C`; restarting the same command resumes from successful run timestamps
 stored in PostgreSQL. If connectivity temporarily fails, the runner stays alive
 and retries on a later tick. The existing `*-local.sh` scripts remain development
 helpers that always target local Docker PostgreSQL.
+
+To manually attempt already-due alerts for the database and Telegram
+credentials exported in the current shell, run:
+
+```bash
+uv --cache-dir .uv-cache run python -m pet_sitting_palantir --deliver-alerts --pretty
+```
 
 Code-owned runtime values such as scraper request pacing, quiet hours, and the
 home-runner tick interval are centralized in

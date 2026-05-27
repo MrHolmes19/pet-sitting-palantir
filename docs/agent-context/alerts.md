@@ -83,9 +83,27 @@ appearance, and alert-relevant fingerprint. `alert_delivery_attempts` stores
 individual provider calls and permits failed retries while enforcing at most
 one successful attempt for an event/channel.
 
+Delivery renders a provider-neutral message from the current stored listing,
+then passes the text to the selected provider. Do not send directly from the
+in-memory scraper result: the persisted event is the restart-safe delivery
+queue. A match outside alert quiet hours is delivered after its creating
+scrape commits, in the same home-runner tick. Failed sends retry on later
+ticks without failing or repeating the scrape.
+
+The v1 event does not snapshot rendered listing details. A delivery retried
+after the listing row changes may therefore describe the current stored
+listing rather than the original event-time fields. This is an accepted
+simplicity tradeoff for the personal Telegram workflow.
+
+Telegram messages use plain text with the matched alert name, location, dates,
+duration, pet counts, and the listing URL.
+
 ## Quiet Hours
 
 Each alert filter owns delivery quiet hours. These may align with the scrape
-pause or use a different interval. When delivery is implemented, a qualifying
-event during delivery quiet hours must be retained for delivery after the
-window instead of discarded.
+pause or use a different interval. A qualifying event during delivery quiet
+hours is retained for delivery after the window instead of discarded.
+
+Delivery is evaluated independently on every home-runner tick, including ticks
+when no scrape is due or scraper quiet hours apply. The event's snapshotted
+`deliver_after` timestamp is the authority for whether it may be sent.

@@ -5,6 +5,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from pet_sitting_palantir.alerts import CreatedAlertEvent
+from pet_sitting_palantir.workflows.deliver_alerts import AlertDeliverySummary
 from pet_sitting_palantir.workflows.home_runner import (
     RunnerAlreadyActiveError,
     _run_continuously,
@@ -43,6 +44,7 @@ def test_continuous_runner_retries_after_tick_error(caplog) -> None:
     _run_continuously(
         max_pages=None,
         due_scope_runner=intermittently_offline_runner,
+        alert_delivery_runner=_no_deliveries,
         sleep_for=sleep_until_stopped,
         clock=lambda: 1,
         runtime_logger=getLogger("test.home_runner"),
@@ -72,6 +74,7 @@ def test_tick_logs_scope_failure_detail(caplog) -> None:
             ),
         ),
         runtime_logger=getLogger("test.home_runner"),
+        alert_delivery_runner=_no_deliveries,
     )
 
     assert "tick_failed due=1 failed=1" in caplog.text
@@ -107,6 +110,7 @@ def test_tick_logs_successful_scope_detail(caplog) -> None:
             failures=(),
         ),
         runtime_logger=getLogger("test.home_runner"),
+        alert_delivery_runner=_no_deliveries,
     )
 
     assert (
@@ -114,7 +118,7 @@ def test_tick_logs_successful_scope_detail(caplog) -> None:
         "pages=2 listings=36 new=1 changed=2 missing=0 alerts=1"
     ) in caplog.text
     assert (
-        "alert_preview filter=test filter type=first_match listing=614587 "
+        "alert_queued filter=test filter type=first_match listing=614587 "
         "channels=telegram,email deliver_after=2026-08-01T06:00:00+12:00 "
         "url=https://example.test/listing/614587"
     ) in caplog.text
@@ -134,10 +138,39 @@ def test_tick_logs_heartbeat_when_no_scope_is_due(caplog) -> None:
             failures=(),
         ),
         runtime_logger=getLogger("test.home_runner"),
+        alert_delivery_runner=_no_deliveries,
     )
 
     assert "tick_start" in caplog.text
     assert "tick_ok status=nothing_due" in caplog.text
+
+
+def test_tick_delivers_after_new_events_are_persisted_in_same_tick() -> None:
+    actions = []
+
+    def scrape(*, max_pages):
+        actions.append("scrape")
+        return DueScopeRunResult(
+            status="success",
+            scopes_due=1,
+            scopes_succeeded=1,
+            scopes_failed=0,
+            results=(),
+            failures=(),
+        )
+
+    def deliver():
+        actions.append("deliver")
+        return _no_deliveries()
+
+    _run_tick(
+        max_pages=None,
+        due_scope_runner=scrape,
+        runtime_logger=getLogger("test.home_runner"),
+        alert_delivery_runner=deliver,
+    )
+
+    assert actions == ["scrape", "deliver"]
 
 
 def test_runner_startup_logs_selected_request_interval(monkeypatch, caplog, tmp_path) -> None:
@@ -195,4 +228,15 @@ def _alert_event() -> CreatedAlertEvent:
             ZoneInfo("Pacific/Auckland")
         ),
         listing_url="https://example.test/listing/614587",
+    )
+
+
+def _no_deliveries() -> AlertDeliverySummary:
+    return AlertDeliverySummary(
+        deliveries_due=0,
+        attempts_made=0,
+        sent=0,
+        failed=0,
+        unconfigured=0,
+        failures=(),
     )

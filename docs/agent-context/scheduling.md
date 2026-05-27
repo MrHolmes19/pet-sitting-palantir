@@ -46,6 +46,9 @@ time completing Lambda deployment instructions for the current plan.
   `Pacific/Auckland`.
 - During quiet hours, that entry point returns `status = "quiet_hours"` and does
   not connect to PostgreSQL or scrape KiwiHouseSitters.
+- The home runner processes pending notification deliveries after the scrape
+  phase of every tick, independently of scrape quiet hours. Delivery respects
+  each event's filter-derived `deliver_after` timestamp.
 - An external schedule may also omit overnight executions, but it must not be
   the only quiet-hours protection.
 - The home runner holds a single-instance lock and refuses a second concurrent
@@ -86,19 +89,27 @@ python -m pet_sitting_palantir --run-continuously --max-pages all
   appears without completion, investigate a blocked database or scrape request.
 - Scope scrape failures do not update `last_success_at`, so they remain eligible
   for later retry.
+- A matching event due immediately is sent after its scrape transaction commits
+  and before the runner sleeps for the next tick. Telegram failure does not
+  fail the scrape; it records a failed delivery attempt and retries later.
 
 ## Runtime Configuration
 
 The home runtime will need:
 
 - `DATABASE_URL`
-- `TELEGRAM_BOT_TOKEN` once Telegram notifications are implemented
-- `TELEGRAM_CHAT_ID` once Telegram notifications are implemented
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_CHAT_ID`
 
 Keep production secrets in a gitignored production environment file or another
 protected local environment mechanism. Existing `*-local.sh` development scripts
 deliberately target local Docker PostgreSQL and must not be used as an unattended
 production runner.
+
+For the initial private-chat Telegram destination, create a bot through
+`@BotFather`, send a message to the bot from the destination account, retrieve
+that chat's id from the Bot API `getUpdates` response, and add the token and
+chat id only to `.env.production`.
 
 Code-owned operational values such as request pacing (`0.5` seconds), the
 five-minute tick, quiet hours, and PostgreSQL connection failure limits live in

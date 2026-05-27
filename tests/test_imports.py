@@ -1,5 +1,6 @@
 from pet_sitting_palantir.config import load_settings
 from pet_sitting_palantir.main import main
+from pet_sitting_palantir.workflows.deliver_alerts import AlertDeliverySummary
 from pet_sitting_palantir.workflows.home_runner import RunnerAlreadyActiveError
 
 
@@ -205,6 +206,24 @@ def test_main_supports_continuous_home_runner_with_all_pages(monkeypatch) -> Non
 
     assert main() == 0
     assert captured_max_pages == [None]
+
+
+def test_main_supports_manual_alert_delivery(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(
+        "pet_sitting_palantir.main.deliver_due_alerts",
+        lambda: AlertDeliverySummary(
+            deliveries_due=1,
+            attempts_made=1,
+            sent=1,
+            failed=0,
+            unconfigured=0,
+            failures=(),
+        ),
+    )
+    monkeypatch.setattr("sys.argv", ["pet-sitting-palantir", "--deliver-alerts"])
+
+    assert main() == 0
+    assert '"sent": 1' in capsys.readouterr().out
 
 
 def test_main_reports_an_already_active_continuous_runner(monkeypatch, capsys) -> None:

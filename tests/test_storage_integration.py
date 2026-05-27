@@ -1,7 +1,7 @@
 import os
 from collections.abc import Iterator
 from dataclasses import replace
-from datetime import date, time
+from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
 from uuid import uuid4
 
@@ -9,7 +9,12 @@ import pytest
 from psycopg import sql
 from psycopg.rows import dict_row
 
-from pet_sitting_palantir.alerts import AlertDelivery, AlertFilterDefinition, AlertQuietHours
+from pet_sitting_palantir.alerts import (
+    AlertDelivery,
+    AlertFilterDefinition,
+    AlertQuietHours,
+    ProviderDeliveryResult,
+)
 from pet_sitting_palantir.domain.models import Listing
 from pet_sitting_palantir.kiwihousesitters.scraper import ScrapeResult
 from pet_sitting_palantir.storage import (
@@ -24,6 +29,7 @@ from pet_sitting_palantir.storage import (
     upsert_listing,
     upsert_listings,
 )
+from pet_sitting_palantir.workflows.deliver_alerts import deliver_due_alerts_with_connection
 from pet_sitting_palantir.workflows.run_due_scopes import run_due_scrape_scopes_with_connection
 from pet_sitting_palantir.workflows.scrape_and_store import scrape_and_store_scope_with_connection
 
@@ -579,6 +585,128 @@ def test_successful_scrape_synchronizes_filter_and_creates_vendor_neutral_event(
     }
     assert result.alert_events[0].filter_name == definition.name
     assert result.alert_events[0].listing_external_id == "matching-listing"
+
+
+@pytest.mark.integration
+def test_due_telegram_event_is_sent_once_and_records_message(postgres_connection) -> None:
+    definition = replace(
+        _matching_alert_filter(),
+        delivery=replace(_matching_alert_filter().delivery, channels=("telegram",)),
+    )
+
+    scrape_and_store_scope_with_connection(
+        postgres_connection,
+        scope_name="auckland_central",
+        scraper=lambda site_filter, *, max_pages: ScrapeResult(
+            search_url="https://example.test/search",
+            pages_fetched=1,
+            listings=(_matching_listing(),),
+        ),
+        alert_filters=(definition,),
+    )
+    provider = _FakeProvider((ProviderDeliveryResult(sent=True, provider_message_id="42"),))
+
+    first = deliver_due_alerts_with_connection(
+        postgres_connection,
+        providers={"telegram": provider},
+        current_time=datetime.now(UTC) + timedelta(days=1),
+    )
+    second = deliver_due_alerts_with_connection(
+        postgres_connection,
+        providers={"telegram": provider},
+        current_time=datetime.now(UTC) + timedelta(days=1),
+    )
+
+    with postgres_connection.cursor() as cursor:
+        cursor.execute("select status, message, provider_message_id from alert_delivery_attempts")
+        attempt = cursor.fetchone()
+
+    assert first.sent == 1
+    assert second.deliveries_due == 0
+    assert len(provider.messages) == 1
+    assert provider.messages[0].startswith("workflow event filter\n\nSTONEFIELDS, AUCKLAND")
+    assert "STONEFIELDS, AUCKLAND" in provider.messages[0]
+    assert "DATES: 1 Aug 2026 - 22 Aug 2026" in provider.messages[0]
+    assert "PETS: 1 dog" in provider.messages[0]
+    assert attempt["status"] == "sent"
+    assert attempt["message"] == provider.messages[0]
+    assert attempt["provider_message_id"] == "42"
+
+
+@pytest.mark.integration
+def test_failed_telegram_event_retries_without_recreating_alert_event(postgres_connection) -> None:
+    definition = replace(
+        _matching_alert_filter(),
+        delivery=replace(_matching_alert_filter().delivery, channels=("telegram",)),
+    )
+    scrape_and_store_scope_with_connection(
+        postgres_connection,
+        scope_name="auckland_central",
+        scraper=lambda site_filter, *, max_pages: ScrapeResult(
+            search_url="https://example.test/search",
+            pages_fetched=1,
+            listings=(_matching_listing(),),
+        ),
+        alert_filters=(definition,),
+    )
+    provider = _FakeProvider(
+        (
+            ProviderDeliveryResult(sent=False, error_message="Telegram request failed: Timeout"),
+            ProviderDeliveryResult(sent=True, provider_message_id="43"),
+        )
+    )
+
+    failed = deliver_due_alerts_with_connection(
+        postgres_connection,
+        providers={"telegram": provider},
+        current_time=datetime.now(UTC) + timedelta(days=1),
+    )
+    sent = deliver_due_alerts_with_connection(
+        postgres_connection,
+        providers={"telegram": provider},
+        current_time=datetime.now(UTC) + timedelta(days=1),
+    )
+
+    with postgres_connection.cursor() as cursor:
+        cursor.execute("select status from alert_delivery_attempts order by id")
+        statuses = [attempt["status"] for attempt in cursor.fetchall()]
+        cursor.execute("select count(*) as events from alert_events")
+        event_count = cursor.fetchone()["events"]
+
+    assert failed.failed == 1
+    assert sent.sent == 1
+    assert statuses == ["failed", "sent"]
+    assert event_count == 1
+
+
+@pytest.mark.integration
+def test_future_alert_delivery_is_not_sent(postgres_connection) -> None:
+    definition = replace(
+        _matching_alert_filter(),
+        delivery=replace(_matching_alert_filter().delivery, channels=("telegram",)),
+    )
+    scrape_and_store_scope_with_connection(
+        postgres_connection,
+        scope_name="auckland_central",
+        scraper=lambda site_filter, *, max_pages: ScrapeResult(
+            search_url="https://example.test/search",
+            pages_fetched=1,
+            listings=(_matching_listing(),),
+        ),
+        alert_filters=(definition,),
+    )
+    with postgres_connection.cursor() as cursor:
+        cursor.execute("update alert_events set deliver_after = now() + interval '1 day'")
+    provider = _FakeProvider((ProviderDeliveryResult(sent=True),))
+
+    result = deliver_due_alerts_with_connection(
+        postgres_connection,
+        providers={"telegram": provider},
+        current_time=datetime.now(UTC),
+    )
+
+    assert result.deliveries_due == 0
+    assert provider.messages == []
 
 
 @pytest.mark.integration
@@ -1440,3 +1568,15 @@ def _matching_listing() -> Listing:
         intro="Pet care required.",
         url="https://example.test/listing/matching-listing",
     )
+
+
+class _FakeProvider:
+    channel = "telegram"
+
+    def __init__(self, results: tuple[ProviderDeliveryResult, ...]) -> None:
+        self.results = list(results)
+        self.messages: list[str] = []
+
+    def send(self, message) -> ProviderDeliveryResult:
+        self.messages.append(message.text)
+        return self.results.pop(0)

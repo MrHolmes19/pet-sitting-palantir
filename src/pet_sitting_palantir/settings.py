@@ -11,6 +11,8 @@ from zoneinfo import ZoneInfo
 KIWIHOUSESITTERS_REQUEST_INTERVAL_SECONDS = 0.5
 # Maximum time to wait for one KiwiHouseSitters HTTP response before failing the scope.
 KIWIHOUSESITTERS_TIMEOUT_SECONDS = 20
+# Maximum time to wait for a Telegram delivery request before retrying on a later tick.
+TELEGRAM_TIMEOUT_SECONDS = 15
 
 # Maximum time to wait while opening a PostgreSQL connection before retrying next tick.
 POSTGRES_CONNECT_TIMEOUT_SECONDS = 10

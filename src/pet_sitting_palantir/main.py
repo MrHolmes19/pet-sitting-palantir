@@ -12,6 +12,7 @@ from pet_sitting_palantir.kiwihousesitters.constants import (
 )
 from pet_sitting_palantir.kiwihousesitters.scraper import scrape_scope
 from pet_sitting_palantir.storage import connect_database, initialize_database
+from pet_sitting_palantir.workflows.deliver_alerts import deliver_due_alerts
 from pet_sitting_palantir.workflows.home_runner import RunnerAlreadyActiveError, run_home_runner
 from pet_sitting_palantir.workflows.run_due_scopes import run_due_scrape_scopes
 from pet_sitting_palantir.workflows.scrape_and_store import scrape_and_store_scope
@@ -45,6 +46,11 @@ def main() -> int:
         result = run_due_scrape_scopes(max_pages=args.max_pages)
         print(dumps(result.to_dict(), indent=2 if args.pretty else None, sort_keys=True))
         return 1 if result.scopes_failed else 0
+
+    if args.deliver_alerts:
+        result = deliver_due_alerts()
+        print(dumps(result.to_dict(), indent=2 if args.pretty else None, sort_keys=True))
+        return 1 if result.failed or result.unconfigured else 0
 
     if args.run_continuously:
         basicConfig(
@@ -120,6 +126,11 @@ def _parse_args() -> Namespace:
         "--run-continuously",
         action="store_true",
         help="Continuously run due database scopes for the home-hosted production runtime.",
+    )
+    parser.add_argument(
+        "--deliver-alerts",
+        action="store_true",
+        help="Attempt delivery of every pending notification whose delivery time is due.",
     )
     parser.add_argument(
         "--init-db",

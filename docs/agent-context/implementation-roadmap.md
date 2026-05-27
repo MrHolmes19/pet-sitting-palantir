@@ -70,7 +70,7 @@ Deliverables:
 
 Goal: notify when listings match personal filters.
 
-Deliverables:
+Completed:
 
 - Editable `config/alert_filters.json` filter and delivery configuration.
 - Local filter matcher.
@@ -78,6 +78,9 @@ Deliverables:
 - Telegram sender behind a notification-provider interface.
 - Duplicate prevention using an alert-relevant fingerprint limited to
   location, dates/duration, and animal fields.
+- Due-event delivery workflow with retryable failed attempts and a manual
+  delivery command.
+- Plain-text listing notification formatter.
 
 ## Phase 6 - Home-Hosted Scheduled Production Run
 
@@ -90,18 +93,14 @@ Completed:
   locking, and retry-on-next-tick failure handling.
 - Protected loading of `DATABASE_URL` from the production environment file.
 - Concise local operational logs.
-
-Deliverables:
-
-- Extend production environment configuration with Telegram credentials when
-  alert delivery is implemented.
+- Extended production environment example configuration with Telegram
+  credentials.
 
 ## Phase 7 - Hardening
 
 Add after the first working pipeline:
 
 - Technical alert when a scope is suspicious or failed.
-- Retry handling for failed Telegram alerts.
 - Parser tests with HTML fixtures.
 - Better structured logs.
 - Optional detail-page scraping only for high-value matches.
