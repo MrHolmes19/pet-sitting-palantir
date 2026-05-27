@@ -31,8 +31,9 @@ Runtime selection and scheduling constraints are documented in
 8. Track new and meaningfully changed listings as alert candidates.
 9. Mark missing listings only if the scrape succeeded.
 10. Apply enabled alert filters.
-11. Send Telegram notifications when needed.
-12. Close the scrape run and update scope timestamps.
+11. Persist channel-neutral alert events and close the scrape run.
+12. In the delivery phase of the same runner tick, send due Telegram events
+    and record provider attempts.
 
 ## Component Boundaries
 
@@ -47,7 +48,10 @@ Current module boundaries:
 - `workflows.scrape_and_store`: orchestration for scraping one scope and persisting results.
 - `storage.lifecycle`: missing and expiration updates for persisted listings.
 - `workflows.run_due_scopes`: orchestration for database scopes whose interval is due.
-- `alerts`: local filter matching, Telegram sending, sent alert records.
+- `alerts`: local filter matching, provider-neutral message formatting, and
+  provider adapters including Telegram.
+- `workflows.deliver_alerts`: persisted due-event delivery and attempt
+  recording, independent of scraping.
 - `lambda_handler`: retained legacy cloud entry point; not the current runtime plan.
 
 ## Scheduler And Deployment
@@ -58,8 +62,8 @@ hours, rejected hosted approaches, and pending home-runner requirements.
 ## Expected Runtime Secrets
 
 - `DATABASE_URL`
-- `TELEGRAM_BOT_TOKEN` once alert delivery is implemented
-- `TELEGRAM_CHAT_ID` once alert delivery is implemented
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_CHAT_ID`
 
 Use `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` only if a future
 implementation switches to the Supabase API client.

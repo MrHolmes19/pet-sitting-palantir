@@ -20,6 +20,13 @@ from pet_sitting_palantir.alerts.matcher import (
     deliver_after,
     listing_matches_filter,
 )
+from pet_sitting_palantir.alerts.messages import AlertMessage, format_alert_message
+from pet_sitting_palantir.alerts.providers import (
+    NotificationProvider,
+    ProviderDeliveryResult,
+    TelegramProvider,
+    configured_notification_providers,
+)
 
 __all__ = [
     "DEFAULT_ALERT_FILTER_DEFAULTS_PATH",
@@ -28,11 +35,17 @@ __all__ = [
     "AlertDelivery",
     "AlertFilterDefaults",
     "AlertFilterDefinition",
+    "AlertMessage",
     "AlertQuietHours",
     "CreatedAlertEvent",
+    "NotificationProvider",
+    "ProviderDeliveryResult",
+    "TelegramProvider",
     "alert_fingerprint",
+    "configured_notification_providers",
     "create_alert_events",
     "deliver_after",
+    "format_alert_message",
     "load_alert_filters",
     "listing_matches_filter",
     "synchronize_alert_filters",

@@ -13,11 +13,16 @@ from pet_sitting_palantir.settings import (
     HOME_RUNNER_TICK_INTERVAL_SECONDS,
     KIWIHOUSESITTERS_REQUEST_INTERVAL_SECONDS,
 )
+from pet_sitting_palantir.workflows.deliver_alerts import (
+    AlertDeliverySummary,
+    deliver_due_alerts,
+)
 from pet_sitting_palantir.workflows.run_due_scopes import DueScopeRunResult, run_due_scrape_scopes
 
 logger = getLogger(__name__)
 
 DueScopeRunner = Callable[..., DueScopeRunResult]
+AlertDeliveryRunner = Callable[[], AlertDeliverySummary]
 
 
 class RunnerAlreadyActiveError(RuntimeError):
@@ -44,6 +49,7 @@ def _run_continuously(
     max_pages: int | None = None,
     tick_interval_seconds: int = HOME_RUNNER_TICK_INTERVAL_SECONDS,
     due_scope_runner: DueScopeRunner = run_due_scrape_scopes,
+    alert_delivery_runner: AlertDeliveryRunner = deliver_due_alerts,
     sleep_for: Callable[[float], None] = sleep,
     clock: Callable[[], float] = time,
     runtime_logger: Logger = logger,
@@ -54,6 +60,7 @@ def _run_continuously(
             _run_tick(
                 max_pages=max_pages,
                 due_scope_runner=due_scope_runner,
+                alert_delivery_runner=alert_delivery_runner,
                 runtime_logger=runtime_logger,
             )
             sleep_for(_seconds_until_next_tick(clock(), tick_interval_seconds))
@@ -66,6 +73,7 @@ def _run_tick(
     max_pages: int | None,
     due_scope_runner: DueScopeRunner,
     runtime_logger: Logger,
+    alert_delivery_runner: AlertDeliveryRunner = deliver_due_alerts,
 ) -> None:
     runtime_logger.info("tick_start")
     try:
@@ -76,49 +84,71 @@ def _run_tick(
             type(error).__name__,
             error,
         )
-        return
-
-    if result.scopes_failed:
-        runtime_logger.error(
-            "tick_failed due=%s failed=%s",
-            result.scopes_due,
-            result.scopes_failed,
-        )
-        for failure in result.failures:
+    else:
+        if result.scopes_failed:
             runtime_logger.error(
-                "scope_fail name=%s error=%s",
-                failure.scope_name,
-                failure.error_message,
+                "tick_failed due=%s failed=%s",
+                result.scopes_due,
+                result.scopes_failed,
             )
-        return
-
-    if result.scopes_due:
-        for stored_result in result.results:
-            runtime_logger.info(
-                "scope_ok name=%s pages=%s "
-                "listings=%s new=%s changed=%s missing=%s alerts=%s",
-                stored_result.scope_name,
-                stored_result.pages_fetched,
-                stored_result.listings_seen,
-                stored_result.new_listings,
-                stored_result.changed_listings,
-                stored_result.missing_marked,
-                len(stored_result.alert_events),
-            )
-            for event in stored_result.alert_events:
-                runtime_logger.info(
-                    "alert_preview filter=%s type=%s listing=%s channels=%s "
-                    "deliver_after=%s url=%s",
-                    event.filter_name,
-                    event.event_type,
-                    event.listing_external_id,
-                    ",".join(event.target_channels),
-                    event.deliver_after.isoformat(),
-                    event.listing_url,
+            for failure in result.failures:
+                runtime_logger.error(
+                    "scope_fail name=%s error=%s",
+                    failure.scope_name,
+                    failure.error_message,
                 )
+        elif result.scopes_due:
+            for stored_result in result.results:
+                runtime_logger.info(
+                    "scope_ok name=%s pages=%s "
+                    "listings=%s new=%s changed=%s missing=%s alerts=%s",
+                    stored_result.scope_name,
+                    stored_result.pages_fetched,
+                    stored_result.listings_seen,
+                    stored_result.new_listings,
+                    stored_result.changed_listings,
+                    stored_result.missing_marked,
+                    len(stored_result.alert_events),
+                )
+                for event in stored_result.alert_events:
+                    runtime_logger.info(
+                        "alert_queued filter=%s type=%s listing=%s channels=%s "
+                        "deliver_after=%s url=%s",
+                        event.filter_name,
+                        event.event_type,
+                        event.listing_external_id,
+                        ",".join(event.target_channels),
+                        event.deliver_after.isoformat(),
+                        event.listing_url,
+                    )
+        else:
+            runtime_logger.info("tick_ok status=%s", result.status)
+
+    try:
+        delivery = alert_delivery_runner()
+    except Exception as error:
+        runtime_logger.error(
+            "delivery_fail type=%s error=%s retry=next_tick",
+            type(error).__name__,
+            error,
+        )
         return
 
-    runtime_logger.info("tick_ok status=%s", result.status)
+    runtime_logger.info(
+        "delivery_ok due=%s attempted=%s sent=%s failed=%s unconfigured=%s",
+        delivery.deliveries_due,
+        delivery.attempts_made,
+        delivery.sent,
+        delivery.failed,
+        delivery.unconfigured,
+    )
+    for failure in delivery.failures:
+        runtime_logger.error(
+            "delivery_unsent event=%s channel=%s error=%s retry=next_tick",
+            failure.alert_event_id,
+            failure.channel,
+            failure.error_message,
+        )
 
 
 def _seconds_until_next_tick(timestamp: float, tick_interval_seconds: int) -> float:
