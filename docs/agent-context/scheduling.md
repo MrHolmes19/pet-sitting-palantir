@@ -41,6 +41,12 @@ time completing Lambda deployment instructions for the current plan.
   through `scrape_scopes.interval_minutes` and `last_success_at`.
 - The home runner invokes the due-scope workflow immediately on startup and on
   subsequent 5-minute clock boundaries.
+- The home runner attempts one daily health check through the configured
+  notification layer from 10:00 inclusive to 10:05 exclusive in
+  `Pacific/Auckland`. The compact message summarizes successful scrape runs by
+  executed scope over the previous 24 hours, new and changed listings, failed
+  runs over the same window. A runner started after that window does not send a
+  catch-up health check for that day.
 - The scheduled/public `run_due_scrape_scopes` application entry point enforces
   quiet hours from `00:00` inclusive to `06:00` exclusive in
   `Pacific/Auckland`.
@@ -87,6 +93,9 @@ python -m pet_sitting_palantir --run-continuously --max-pages all
 - Every tick logs start and completion at `INFO` level, including ticks that
   perform no scrape because nothing is due or quiet hours apply. If a start log
   appears without completion, investigate a blocked database or scrape request.
+- If the daily health check does not arrive by 10:05 New Zealand time,
+  investigate whether the home machine is powered on, connected, and still
+  running `scripts/run-production.sh`.
 - Scope scrape failures do not update `last_success_at`, so they remain eligible
   for later retry.
 - A matching event due immediately is sent after its scrape transaction commits

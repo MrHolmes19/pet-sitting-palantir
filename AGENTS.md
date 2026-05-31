@@ -47,6 +47,10 @@ Build a low-cost personal scraper and alerting system for KiwiHouseSitters listi
 
 ## Working Style For This Repo
 
+- On the first assistant turn for a new task or session, discuss the approach
+  and wait for an explicit go-ahead before editing files. Proceed immediately
+  only when the user explicitly says to implement now, skip discussion, or make
+  the code changes without a planning pass.
 - Prefer small, testable increments.
 - Preserve scraping fixtures once they exist; parser changes should be fixture-tested.
 - Favor simple operational reliability over premature analytics features.

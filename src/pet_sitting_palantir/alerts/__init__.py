@@ -22,10 +22,13 @@ from pet_sitting_palantir.alerts.matcher import (
 )
 from pet_sitting_palantir.alerts.messages import AlertMessage, format_alert_message
 from pet_sitting_palantir.alerts.providers import (
+    NotificationDispatchFailure,
+    NotificationDispatchSummary,
     NotificationProvider,
     ProviderDeliveryResult,
     TelegramProvider,
     configured_notification_providers,
+    send_notification,
 )
 
 __all__ = [
@@ -38,6 +41,8 @@ __all__ = [
     "AlertMessage",
     "AlertQuietHours",
     "CreatedAlertEvent",
+    "NotificationDispatchFailure",
+    "NotificationDispatchSummary",
     "NotificationProvider",
     "ProviderDeliveryResult",
     "TelegramProvider",
@@ -48,5 +53,6 @@ __all__ = [
     "format_alert_message",
     "load_alert_filters",
     "listing_matches_filter",
+    "send_notification",
     "synchronize_alert_filters",
 ]
