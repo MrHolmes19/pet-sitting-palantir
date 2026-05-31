@@ -230,6 +230,22 @@ scripts/init-production-postgres.sh
 scripts/psql-production.sh
 ```
 
+Create a read-only logical backup from production:
+
+```bash
+scripts/backup-production.sh
+```
+
+Restore that backup into the local Docker database for analysis:
+
+```bash
+scripts/restore-local-backup.sh .backups/<timestamp>
+scripts/psql-local.sh
+```
+
+The restore command replaces only the local Docker database. There is
+intentionally no production restore script in this workflow.
+
 Production scraping is intended to run on an always-on home machine using its
 residential network connection. After configuring `.env.production`, start the
 restartable production runner with:

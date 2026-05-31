@@ -14,6 +14,9 @@ Build a low-cost personal scraper and alerting system for KiwiHouseSitters listi
 ## General Rules
 
 - Keep this file generic. Put topic-specific decisions in the relevant context file.
+- Keep README.md as a big-picture overview with useful commands for navigation
+  and operation. Do not let it become a journal of implementation details or
+  one-off troubleshooting notes.
 - Use progressive disclosure: open only the docs needed for the current task.
 - Treat context and tool calls as a scarce budget. Prefer the smallest high-signal check that can answer the task correctly.
 - Update docs when a product or architecture decision changes.
@@ -39,6 +42,7 @@ Build a low-cost personal scraper and alerting system for KiwiHouseSitters listi
 - Scheduler platform and deployment: [scheduling.md](docs/agent-context/scheduling.md)
 - Scrape scope cadence and coverage: [scopes.md](docs/agent-context/scopes.md)
 - Database schema: [data-model.md](docs/agent-context/data-model.md)
+- Database backups and local restore: [backups.md](docs/agent-context/backups.md)
 - Data contracts: [docs/contracts](docs/contracts)
 - Listing lifecycle and safety rules: [lifecycle-and-safety.md](docs/agent-context/lifecycle-and-safety.md)
 - Telegram alerts and filters: [alerts.md](docs/agent-context/alerts.md)
