@@ -2,7 +2,13 @@ from datetime import date
 
 import requests
 
-from pet_sitting_palantir.alerts import AlertMessage, TelegramProvider, format_alert_message
+from pet_sitting_palantir.alerts import (
+    AlertMessage,
+    ProviderDeliveryResult,
+    TelegramProvider,
+    format_alert_message,
+    send_notification,
+)
 from pet_sitting_palantir.storage.models import ListingRecord
 
 
@@ -59,6 +65,42 @@ def test_telegram_network_error_does_not_expose_token() -> None:
     assert result.sent is False
     assert result.error_message == "Telegram request failed: ConnectionError"
     assert "never-store-this" not in result.error_message
+
+
+def test_send_notification_dispatches_to_configured_providers() -> None:
+    providers = {
+        "first": FakeProvider(sent=True, provider_message_id="first-42"),
+        "second": FakeProvider(sent=False, error_message="offline"),
+    }
+
+    result = send_notification(AlertMessage(text="Health check OK"), providers=providers)
+
+    assert result.providers_configured == 2
+    assert result.sent == 1
+    assert result.failed == 1
+    assert result.provider_message_ids == {"first": "first-42"}
+    assert result.failures[0].channel == "second"
+    assert result.failures[0].error_message == "offline"
+
+
+class FakeProvider:
+    def __init__(
+        self,
+        *,
+        sent: bool,
+        provider_message_id: str | None = None,
+        error_message: str | None = None,
+    ) -> None:
+        self.sent = sent
+        self.provider_message_id = provider_message_id
+        self.error_message = error_message
+
+    def send(self, message: AlertMessage) -> ProviderDeliveryResult:
+        return ProviderDeliveryResult(
+            sent=self.sent,
+            provider_message_id=self.provider_message_id,
+            error_message=self.error_message,
+        )
 
 
 def _listing() -> ListingRecord:

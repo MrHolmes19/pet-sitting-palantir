@@ -244,8 +244,15 @@ minutes. It also attempts any due Telegram delivery in each tick. If migration
 application fails, scraping does not start. Stop it with
 `Ctrl+C`; restarting the same command resumes from successful run timestamps
 stored in PostgreSQL. If connectivity temporarily fails, the runner stays alive
-and retries on a later tick. The existing `*-local.sh` scripts remain development
-helpers that always target local Docker PostgreSQL.
+and retries on a later tick.
+
+The continuous runner also attempts one daily health check through the
+configured notification layer between 10:00 and 10:05 New Zealand time. If that
+message is missing by 10:05, check the home machine, network, and runner
+process.
+
+The existing `*-local.sh` scripts remain development helpers that always target
+local Docker PostgreSQL.
 
 To manually attempt already-due alerts for the database and Telegram
 credentials exported in the current shell, run:

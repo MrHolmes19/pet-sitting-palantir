@@ -27,6 +27,12 @@ POSTGRES_KEEPALIVES_COUNT = 3
 HOME_RUNNER_TICK_INTERVAL_SECONDS = 5 * 60
 # Process lock path used to prevent two production home runners running together.
 HOME_RUNNER_LOCK_FILE = Path("/tmp/pet-sitting-palantir-home-runner.lock")
+# Local time when the home runner sends its daily operational health notification.
+HOME_RUNNER_HEALTHCHECK_TIME = time(hour=10)
+# Minutes after the daily health notification time during which sending is allowed.
+HOME_RUNNER_HEALTHCHECK_WINDOW_MINUTES = 5
+# Number of hours included in the daily health notification scan summary.
+HOME_RUNNER_HEALTHCHECK_LOOKBACK_HOURS = 24
 
 # Time zone used to evaluate quiet hours, independent of the computer's local setting.
 NEW_ZEALAND_TIME_ZONE = ZoneInfo("Pacific/Auckland")

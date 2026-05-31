@@ -2,6 +2,7 @@
 
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from datetime import datetime, timedelta
 from fcntl import LOCK_EX, LOCK_NB, LOCK_UN, flock
 from logging import Logger, getLogger
 from os import getpid
@@ -9,20 +10,31 @@ from pathlib import Path
 from time import sleep, time
 
 from pet_sitting_palantir.settings import (
+    HOME_RUNNER_HEALTHCHECK_TIME,
+    HOME_RUNNER_HEALTHCHECK_WINDOW_MINUTES,
     HOME_RUNNER_LOCK_FILE,
     HOME_RUNNER_TICK_INTERVAL_SECONDS,
     KIWIHOUSESITTERS_REQUEST_INTERVAL_SECONDS,
+    NEW_ZEALAND_TIME_ZONE,
 )
 from pet_sitting_palantir.workflows.deliver_alerts import (
     AlertDeliverySummary,
     deliver_due_alerts,
 )
-from pet_sitting_palantir.workflows.run_due_scopes import DueScopeRunResult, run_due_scrape_scopes
+from pet_sitting_palantir.workflows.healthcheck import (
+    HealthcheckDeliverySummary,
+    send_healthcheck,
+)
+from pet_sitting_palantir.workflows.run_due_scopes import (
+    DueScopeRunResult,
+    run_due_scrape_scopes,
+)
 
 logger = getLogger(__name__)
 
 DueScopeRunner = Callable[..., DueScopeRunResult]
 AlertDeliveryRunner = Callable[[], AlertDeliverySummary]
+HealthcheckRunner = Callable[..., HealthcheckDeliverySummary]
 
 
 class RunnerAlreadyActiveError(RuntimeError):
@@ -50,13 +62,46 @@ def _run_continuously(
     tick_interval_seconds: int = HOME_RUNNER_TICK_INTERVAL_SECONDS,
     due_scope_runner: DueScopeRunner = run_due_scrape_scopes,
     alert_delivery_runner: AlertDeliveryRunner = deliver_due_alerts,
+    healthcheck_runner: HealthcheckRunner = send_healthcheck,
     sleep_for: Callable[[float], None] = sleep,
     clock: Callable[[], float] = time,
     runtime_logger: Logger = logger,
 ) -> None:
     """Run due-scope ticks forever, retrying after tick-level failures."""
+    last_healthcheck_date = None
     try:
         while True:
+            current_time = datetime.fromtimestamp(clock(), tz=NEW_ZEALAND_TIME_ZONE)
+            if _healthcheck_is_due(
+                current_time=current_time,
+                last_healthcheck_date=last_healthcheck_date,
+            ):
+                healthcheck = healthcheck_runner(current_time=current_time)
+                if healthcheck.status == "sent":
+                    runtime_logger.info(
+                        "healthcheck_sent provider_message_id=%s",
+                        healthcheck.provider_message_id,
+                    )
+                    last_healthcheck_date = current_time.date()
+                elif healthcheck.status == "partial_failure":
+                    runtime_logger.error(
+                        "healthcheck_partial provider_message_id=%s error=%s",
+                        healthcheck.provider_message_id,
+                        healthcheck.error_message,
+                    )
+                    last_healthcheck_date = current_time.date()
+                elif healthcheck.status == "unconfigured":
+                    runtime_logger.error(
+                        "healthcheck_unconfigured error=%s",
+                        healthcheck.error_message,
+                    )
+                    last_healthcheck_date = current_time.date()
+                else:
+                    runtime_logger.error(
+                        "healthcheck_fail error=%s retry=next_tick",
+                        healthcheck.error_message,
+                    )
+
             _run_tick(
                 max_pages=max_pages,
                 due_scope_runner=due_scope_runner,
@@ -154,6 +199,27 @@ def _run_tick(
 def _seconds_until_next_tick(timestamp: float, tick_interval_seconds: int) -> float:
     remainder = timestamp % tick_interval_seconds
     return tick_interval_seconds if remainder == 0 else tick_interval_seconds - remainder
+
+
+def _healthcheck_is_due(
+    *,
+    current_time: datetime,
+    last_healthcheck_date,
+) -> bool:
+    if current_time.tzinfo is None:
+        raise ValueError("current_time must include a timezone")
+    local_time = current_time.astimezone(NEW_ZEALAND_TIME_ZONE)
+    window_start = local_time.replace(
+        hour=HOME_RUNNER_HEALTHCHECK_TIME.hour,
+        minute=HOME_RUNNER_HEALTHCHECK_TIME.minute,
+        second=0,
+        microsecond=0,
+    )
+    window_end = window_start + timedelta(minutes=HOME_RUNNER_HEALTHCHECK_WINDOW_MINUTES)
+    return (
+        window_start <= local_time < window_end
+        and last_healthcheck_date != local_time.date()
+    )
 
 
 @contextmanager

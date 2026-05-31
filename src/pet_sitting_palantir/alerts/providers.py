@@ -23,6 +23,25 @@ class ProviderDeliveryResult:
     error_message: str | None = None
 
 
+@dataclass(frozen=True)
+class NotificationDispatchFailure:
+    """One failed provider attempt for a direct notification."""
+
+    channel: str
+    error_message: str
+
+
+@dataclass(frozen=True)
+class NotificationDispatchSummary:
+    """Provider-neutral result for a direct notification send."""
+
+    providers_configured: int
+    sent: int
+    failed: int
+    provider_message_ids: Mapping[str, str]
+    failures: tuple[NotificationDispatchFailure, ...]
+
+
 class NotificationProvider(Protocol):
     """Outbound notification channel adapter."""
 
@@ -93,6 +112,38 @@ def configured_notification_providers() -> Mapping[str, NotificationProvider]:
         chat_id=settings.telegram_chat_id,
     )
     return {telegram.channel: telegram}
+
+
+def send_notification(
+    message: AlertMessage,
+    *,
+    providers: Mapping[str, NotificationProvider] | None = None,
+) -> NotificationDispatchSummary:
+    """Send one direct notification through every configured provider."""
+    registry = configured_notification_providers() if providers is None else providers
+    provider_message_ids: dict[str, str] = {}
+    failures: list[NotificationDispatchFailure] = []
+
+    for channel, provider in sorted(registry.items()):
+        result = provider.send(message)
+        if result.sent:
+            if result.provider_message_id is not None:
+                provider_message_ids[channel] = result.provider_message_id
+        else:
+            failures.append(
+                NotificationDispatchFailure(
+                    channel=channel,
+                    error_message=result.error_message or "Notification send failed",
+                )
+            )
+
+    return NotificationDispatchSummary(
+        providers_configured=len(registry),
+        sent=len(registry) - len(failures),
+        failed=len(failures),
+        provider_message_ids=provider_message_ids,
+        failures=tuple(failures),
+    )
 
 
 def _response_payload(response: requests.Response) -> dict[str, Any]:

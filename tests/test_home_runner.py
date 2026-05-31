@@ -7,7 +7,9 @@ import pytest
 from pet_sitting_palantir.alerts import CreatedAlertEvent
 from pet_sitting_palantir.workflows.deliver_alerts import AlertDeliverySummary
 from pet_sitting_palantir.workflows.home_runner import (
+    HealthcheckDeliverySummary,
     RunnerAlreadyActiveError,
+    _healthcheck_is_due,
     _run_continuously,
     _run_tick,
     _single_instance_lock,
@@ -173,6 +175,59 @@ def test_tick_delivers_after_new_events_are_persisted_in_same_tick() -> None:
     assert actions == ["scrape", "deliver"]
 
 
+def test_continuous_runner_sends_daily_healthcheck_once_inside_10am_window() -> None:
+    attempted_healthchecks = []
+    sleep_delays = []
+    timestamp = datetime(2026, 8, 1, 10, 0, tzinfo=ZoneInfo("Pacific/Auckland")).timestamp()
+
+    def sleep_until_stopped(delay: float) -> None:
+        sleep_delays.append(delay)
+        if len(sleep_delays) == 2:
+            raise KeyboardInterrupt
+
+    def healthcheck(*, current_time):
+        attempted_healthchecks.append(current_time)
+        return _sent_healthcheck()
+
+    _run_continuously(
+        max_pages=None,
+        due_scope_runner=lambda *, max_pages: DueScopeRunResult(
+            status="nothing_due",
+            scopes_due=0,
+            scopes_succeeded=0,
+            scopes_failed=0,
+            results=(),
+            failures=(),
+        ),
+        alert_delivery_runner=_no_deliveries,
+        healthcheck_runner=healthcheck,
+        sleep_for=sleep_until_stopped,
+        clock=lambda: timestamp,
+        runtime_logger=getLogger("test.home_runner"),
+    )
+
+    assert attempted_healthchecks == [
+        datetime(2026, 8, 1, 10, 0, tzinfo=ZoneInfo("Pacific/Auckland"))
+    ]
+
+
+def test_daily_healthcheck_is_not_due_after_1005_window() -> None:
+    assert (
+        _healthcheck_is_due(
+            current_time=datetime(
+                2026,
+                8,
+                1,
+                10,
+                5,
+                tzinfo=ZoneInfo("Pacific/Auckland"),
+            ),
+            last_healthcheck_date=None,
+        )
+        is False
+    )
+
+
 def test_runner_startup_logs_selected_request_interval(monkeypatch, caplog, tmp_path) -> None:
     monkeypatch.setattr(
         "pet_sitting_palantir.workflows.home_runner._run_continuously",
@@ -239,4 +294,11 @@ def _no_deliveries() -> AlertDeliverySummary:
         failed=0,
         unconfigured=0,
         failures=(),
+    )
+
+
+def _sent_healthcheck():
+    return HealthcheckDeliverySummary(
+        status="sent",
+        provider_message_id="42",
     )
