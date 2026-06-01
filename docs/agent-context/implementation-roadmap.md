@@ -104,3 +104,20 @@ Add after the first working pipeline:
 - Parser tests with HTML fixtures.
 - Better structured logs.
 - Optional detail-page scraping only for high-value matches.
+
+## Phase 8 - Local Analytics Dashboard
+
+Goal: provide an interactive local dashboard for market exploration.
+
+Detailed direction is owned by [analytics.md](analytics.md).
+
+Deliverables:
+
+- Synthetic analytics data generator.
+- Local DuckDB analytics snapshot.
+- Streamlit dashboard with Plotly charts.
+- Overview, seasonality, lead-time, location, Auckland Central, and data
+  explorer views.
+- Production refresh command that rebuilds the local analytics snapshot from the
+  production database.
+- CSV export for filtered dashboard data.

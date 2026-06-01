@@ -33,6 +33,17 @@ The system will eventually support analytics, but analytics are only useful if t
 
 Decision: build scraper quality, persistence, lifecycle handling, and alerts before dashboards or analysis jobs.
 
+## Local Analytics Dashboard
+
+Decision: build analytics as a local, command-driven dashboard rather than a
+hosted app or separate frontend/backend application. Use DuckDB as a refreshable
+local analytics snapshot, Streamlit for the local UI server, and Plotly for
+interactive charts. Build against synthetic data first so the dashboard can be
+designed before months or years of real data exist.
+
+The detailed analytics plan, metrics, and dashboard shape are owned by
+[analytics.md](analytics.md).
+
 ## Cost And Maintenance
 
 This is a personal project, so operational simplicity matters more than completeness.
