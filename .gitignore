@@ -20,5 +20,6 @@ venv/
 
 # Local files
 .DS_Store
+.analytics/
 .backups/
 build/
