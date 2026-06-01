@@ -2,6 +2,7 @@
 
 import duckdb
 
+from pet_sitting_palantir.analytics.cli import main
 from pet_sitting_palantir.analytics.synthetic import (
     DEFAULT_SEED,
     generate_synthetic_listings,
@@ -50,3 +51,15 @@ def test_write_demo_database_creates_expected_tables(tmp_path) -> None:
     assert long_sit_count > 0
     assert source == "synthetic"
 
+
+def test_inspect_demo_command_prints_sanity_checks(tmp_path, capsys) -> None:
+    output_path = tmp_path / "demo.duckdb"
+    write_demo_database(output_path=output_path, listing_count=30, seed=DEFAULT_SEED)
+
+    result = main(["inspect-demo", "--path", str(output_path), "--limit", "3"])
+
+    output = capsys.readouterr().out
+    assert result == 0
+    assert "Sample listings" in output
+    assert "Listings by region" in output
+    assert "Listings by start month" in output

@@ -297,6 +297,7 @@ Suggested commands:
 
 ```bash
 uv run python -m pet_sitting_palantir.analytics generate-demo
+uv run python -m pet_sitting_palantir.analytics inspect-demo
 uv run python -m pet_sitting_palantir.analytics refresh --source production
 uv run streamlit run analytics/dashboard.py
 ```
@@ -308,6 +309,10 @@ scripts/analytics-generate-demo.sh
 scripts/analytics-refresh.sh
 scripts/analytics-dashboard.sh
 ```
+
+`inspect-demo` is an intentional lightweight debug command. Keep it available so
+agents and humans can quickly verify the generated DuckDB file without fragile
+inline SQL or shell quoting.
 
 Production refresh must read database credentials from the existing environment
 configuration pattern. Do not hardcode production database URLs in analytics
@@ -335,4 +340,3 @@ For analytics code changes:
 - Test synthetic data generation shape.
 - Prefer targeted tests before running the full suite.
 - Manually run the dashboard when UI behavior changes.
-
