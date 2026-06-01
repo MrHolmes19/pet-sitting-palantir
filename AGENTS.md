@@ -43,6 +43,7 @@ Build a low-cost personal scraper and alerting system for KiwiHouseSitters listi
 - Scrape scope cadence and coverage: [scopes.md](docs/agent-context/scopes.md)
 - Database schema: [data-model.md](docs/agent-context/data-model.md)
 - Database backups and local restore: [backups.md](docs/agent-context/backups.md)
+- Analytics snapshots and dashboard: [analytics.md](docs/agent-context/analytics.md)
 - Data contracts: [docs/contracts](docs/contracts)
 - Listing lifecycle and safety rules: [lifecycle-and-safety.md](docs/agent-context/lifecycle-and-safety.md)
 - Telegram alerts and filters: [alerts.md](docs/agent-context/alerts.md)
