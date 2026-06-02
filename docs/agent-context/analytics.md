@@ -80,6 +80,10 @@ The intended UI is simple and functional:
 
 - Sidebar filters for data source, date range, location, pet type, and sit
   length.
+- Sidebar multi-select filters start empty. An empty selection means "include
+  all"; selected values narrow the dataset.
+- The sidebar date range filters by sitting start date. Do not add a global
+  first-seen date filter; first-seen date is only useful for lead-time analysis.
 - Main page tabs for overview, seasonality, lead time, location, Auckland
   Central, and data explorer.
 - Numeric outputs using metric cards.
@@ -162,6 +166,10 @@ Charts:
 - Ranked bar chart by city.
 - Optional stacked bars by pet type.
 
+City-level charts should be narrowed by region and/or subregion inside the
+Location tab. Do not default to a national city chart that mixes unrelated
+cities with the same or similar names.
+
 Do not build a geographic map in the first version. Current data has location
 names, not coordinates.
 
@@ -177,9 +185,15 @@ Default filters:
 Charts:
 
 - Weekly heatmap for sitting opportunities.
-- Long-sit trend over time.
+- Listings-over-time trend, segmented by the shared dashboard filters.
 - Lead-time distribution for Auckland Central.
 - Pet-type breakdown.
+
+The weekly heatmap should show at most one calendar year at a time. If the
+selected data spans multiple years, provide a local year selector. Keep the
+title, axis hint, and quiet-to-busy color legend outside the horizontal scrolling
+area. Use compact week-start labels such as `01/01`, visible week separators,
+stronger month separators, and horizontal scrolling only for the heatmap cells.
 
 This page should help decide when to accept scarce opportunities versus wait for
 better ones.
