@@ -15,6 +15,7 @@ from pet_sitting_palantir.analytics.data import (
     seasonality_frame,
     weekly_opportunity_timeline,
 )
+from pet_sitting_palantir.analytics.snapshot import DEFAULT_PRODUCTION_SNAPSHOT_PATH
 
 DEFAULT_DATABASE_PATH = Path(".analytics/demo.duckdb")
 HEATMAP_COLOR_SCALE = "RdYlBu_r"
@@ -43,7 +44,7 @@ def main() -> None:
     st.set_page_config(page_title="Pet Sitting Analytics", layout="wide")
     st.title("Pet Sitting Analytics")
 
-    database_path = Path(st.sidebar.text_input("DuckDB path", str(DEFAULT_DATABASE_PATH)))
+    database_path = _database_path_selector()
     if st.sidebar.button("Reload data"):
         st.cache_data.clear()
 
@@ -51,10 +52,7 @@ def main() -> None:
         facts = _load_data(str(database_path))
     except FileNotFoundError:
         st.error(f"Analytics database not found: {database_path}")
-        st.code(
-            "uv --cache-dir .uv-cache run python -m pet_sitting_palantir.analytics "
-            "generate-demo"
-        )
+        _missing_database_command(database_path)
         return
 
     filters = _sidebar_filters(facts)
@@ -114,6 +112,32 @@ def main() -> None:
 @st.cache_data(show_spinner=False)
 def _load_data(database_path: str) -> pd.DataFrame:
     return load_listing_facts(Path(database_path))
+
+
+def _database_path_selector() -> Path:
+    source = st.sidebar.selectbox(
+        "Data source",
+        ["Demo data", "Production snapshot", "Custom path"],
+    )
+    if source == "Demo data":
+        return DEFAULT_DATABASE_PATH
+    if source == "Production snapshot":
+        return DEFAULT_PRODUCTION_SNAPSHOT_PATH
+    return Path(st.sidebar.text_input("DuckDB path", str(DEFAULT_DATABASE_PATH)))
+
+
+def _missing_database_command(database_path: Path) -> None:
+    if database_path == DEFAULT_PRODUCTION_SNAPSHOT_PATH:
+        st.code(
+            "uv --cache-dir .uv-cache run python -m pet_sitting_palantir.analytics "
+            "refresh --source production"
+        )
+        return
+
+    st.code(
+        "uv --cache-dir .uv-cache run python -m pet_sitting_palantir.analytics "
+        "generate-demo"
+    )
 
 
 def _sidebar_filters(facts: pd.DataFrame) -> DashboardFilters:

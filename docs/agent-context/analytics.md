@@ -328,9 +328,16 @@ scripts/analytics-dashboard.sh
 agents and humans can quickly verify the generated DuckDB file without fragile
 inline SQL or shell quoting.
 
-Production refresh must read database credentials from the existing environment
-configuration pattern. Do not hardcode production database URLs in analytics
-code.
+Production refresh must read database credentials from the existing production
+environment file pattern. By default, `refresh --source production` reads
+`DATABASE_URL` from `.env.production`, not the normal repo `.env`, so analytics
+refreshes do not accidentally target local Postgres. Do not hardcode production
+database URLs in analytics code.
+
+The production refresh command writes `.analytics/pet_sitting.duckdb` by copying
+the production `listings` table into the same analytics-facing shape used by the
+demo database. The dashboard should offer a simple data-source selector for
+demo data, production snapshot, and a custom DuckDB path.
 
 ## Implementation Sequence
 
