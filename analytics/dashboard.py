@@ -15,7 +15,11 @@ from pet_sitting_palantir.analytics.data import (
     seasonality_frame,
     weekly_opportunity_timeline,
 )
-from pet_sitting_palantir.analytics.snapshot import DEFAULT_PRODUCTION_SNAPSHOT_PATH
+from pet_sitting_palantir.analytics.snapshot import (
+    DEFAULT_PRODUCTION_SNAPSHOT_PATH,
+    database_url_from_env_file,
+    refresh_production_snapshot,
+)
 
 DEFAULT_DATABASE_PATH = Path(".analytics/demo.duckdb")
 HEATMAP_COLOR_SCALE = "RdYlBu_r"
@@ -44,7 +48,10 @@ def main() -> None:
     st.set_page_config(page_title="Pet Sitting Analytics", layout="wide")
     st.title("Pet Sitting Analytics")
 
-    database_path = _database_path_selector()
+    data_source, database_path = _database_path_selector()
+    if data_source == "Production snapshot":
+        _production_refresh_controls()
+
     if st.sidebar.button("Reload data"):
         st.cache_data.clear()
 
@@ -114,16 +121,34 @@ def _load_data(database_path: str) -> pd.DataFrame:
     return load_listing_facts(Path(database_path))
 
 
-def _database_path_selector() -> Path:
+def _database_path_selector() -> tuple[str, Path]:
     source = st.sidebar.selectbox(
         "Data source",
         ["Demo data", "Production snapshot", "Custom path"],
     )
     if source == "Demo data":
-        return DEFAULT_DATABASE_PATH
+        return source, DEFAULT_DATABASE_PATH
     if source == "Production snapshot":
-        return DEFAULT_PRODUCTION_SNAPSHOT_PATH
-    return Path(st.sidebar.text_input("DuckDB path", str(DEFAULT_DATABASE_PATH)))
+        return source, DEFAULT_PRODUCTION_SNAPSHOT_PATH
+    return source, Path(st.sidebar.text_input("DuckDB path", str(DEFAULT_DATABASE_PATH)))
+
+
+def _production_refresh_controls() -> None:
+    st.sidebar.divider()
+    confirmed = st.sidebar.checkbox(
+        "I understand this only reads production",
+        value=False,
+        help="Refresh reads production Postgres and overwrites only the local DuckDB snapshot.",
+    )
+    if st.sidebar.button("Refresh from Prod DDBB", disabled=not confirmed):
+        try:
+            with st.spinner("Refreshing local production snapshot..."):
+                database_url = database_url_from_env_file()
+                result = refresh_production_snapshot(database_url=database_url)
+                st.cache_data.clear()
+            st.sidebar.success(f"Refreshed {result.listing_count:,} listings.")
+        except Exception as error:
+            st.sidebar.error(f"Refresh failed: {error}")
 
 
 def _missing_database_command(database_path: Path) -> None:
@@ -208,6 +233,7 @@ def _overview(frame: pd.DataFrame) -> None:
                 title="Listings by region",
             ).update_layout(yaxis={"categoryorder": "total ascending"}),
             width="stretch",
+            key="overview_region_counts",
         )
     with right:
         pet_counts = _count_by(frame, "pet_label", limit=10)
@@ -220,6 +246,7 @@ def _overview(frame: pd.DataFrame) -> None:
                 hole=0.35,
             ),
             width="stretch",
+            key="overview_pet_mix",
         )
 
 
@@ -266,6 +293,7 @@ def _seasonality(frame: pd.DataFrame) -> None:
             title=f"{metric_label} by {interval_label.lower()}",
         ),
         width="stretch",
+        key="seasonality_heatmap",
     )
 
     st.plotly_chart(
@@ -277,6 +305,7 @@ def _seasonality(frame: pd.DataFrame) -> None:
             labels={"period_start": "Period", metric_column: metric_title},
         ),
         width="stretch",
+        key="seasonality_over_time",
     )
 
 
@@ -307,6 +336,7 @@ def _lead_time(frame: pd.DataFrame) -> None:
             labels={"lead_time_days": "Days before sit start"},
         ),
         width="stretch",
+        key="lead_time_distribution",
     )
 
     st.plotly_chart(
@@ -319,6 +349,7 @@ def _lead_time(frame: pd.DataFrame) -> None:
             labels={"duration_bucket": "Sit length", "lead_time_days": "Lead time days"},
         ),
         width="stretch",
+        key="lead_time_by_duration",
     )
 
 
@@ -346,6 +377,7 @@ def _location(frame: pd.DataFrame) -> None:
             title=f"Listings by {level_label.lower()}",
         ).update_layout(yaxis={"categoryorder": "total ascending"}),
         width="stretch",
+        key=f"location_counts_{column}",
     )
 
     stacked = (
@@ -365,6 +397,7 @@ def _location(frame: pd.DataFrame) -> None:
             labels={column: level_label, "pet_label": "Pet type"},
         ),
         width="stretch",
+        key=f"location_pet_mix_{column}",
     )
 
 
@@ -393,6 +426,7 @@ def _auckland_central(frame: pd.DataFrame) -> None:
             labels={"period_start": "Month", "listing_count": "Listings"},
         ),
         width="stretch",
+        key="auckland_listings_over_time",
     )
 
 

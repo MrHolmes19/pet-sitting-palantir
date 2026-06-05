@@ -88,6 +88,10 @@ The intended UI is simple and functional:
   Central, and data explorer.
 - Numeric outputs using metric cards.
 - Interactive Plotly charts for heatmaps, bars, histograms, and distributions.
+- The production-snapshot source may expose a guarded dashboard button to
+  refresh local data from production. This button must only read production
+  Postgres and overwrite the local DuckDB snapshot; it must never write to
+  production.
 
 Avoid spending effort on custom styling unless usability requires it.
 
@@ -303,25 +307,17 @@ seasonal patterns:
 Generated data should match the analytics-facing columns used from `listings` so
 the same dashboard can run against demo and real data.
 
-## Commands To Add
+## Commands
 
 Use `uv` for command execution.
 
-Suggested commands:
+Core commands:
 
 ```bash
 uv run python -m pet_sitting_palantir.analytics generate-demo
 uv run python -m pet_sitting_palantir.analytics inspect-demo
 uv run python -m pet_sitting_palantir.analytics refresh --source production
-uv run streamlit run analytics/dashboard.py
-```
-
-Small wrapper scripts may be added later for convenience, for example:
-
-```text
-scripts/analytics-generate-demo.sh
-scripts/analytics-refresh.sh
-scripts/analytics-dashboard.sh
+scripts/run-analytics-dashboard.sh
 ```
 
 `inspect-demo` is an intentional lightweight debug command. Keep it available so
