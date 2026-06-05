@@ -55,6 +55,14 @@ def main() -> None:
     if st.sidebar.button("Reload data"):
         st.cache_data.clear()
 
+    if data_source == "Demo data":
+        st.sidebar.write("")
+        st.sidebar.write("")
+        st.sidebar.write("")
+        st.sidebar.write("")
+        st.sidebar.write("")
+        st.sidebar.write("")
+
     try:
         facts = _load_data(str(database_path))
     except FileNotFoundError:
@@ -169,16 +177,7 @@ def _sidebar_filters(facts: pd.DataFrame) -> DashboardFilters:
     st.sidebar.header("Filters")
     minimum_date = facts["start_date"].min().date()
     maximum_date = facts["start_date"].max().date()
-    selected_range = st.sidebar.date_input(
-        "Sit date range",
-        value=(minimum_date, maximum_date),
-        min_value=minimum_date,
-        max_value=maximum_date,
-    )
-    if len(selected_range) == 2:
-        start_date, end_date = selected_range
-    else:
-        start_date, end_date = minimum_date, maximum_date
+    start_date, end_date = _date_range_filter(minimum_date, maximum_date)
 
     regions = _multiselect_all("Region", facts["region"])
     subregion_frame = facts if not regions else facts[facts["region"].isin(regions)]
@@ -210,6 +209,50 @@ def _sidebar_filters(facts: pd.DataFrame) -> DashboardFilters:
         duration_buckets=duration_buckets,
         statuses=statuses,
     )
+
+
+def _date_range_filter(minimum_date: object, maximum_date: object) -> tuple[object, object]:
+    full_range = (minimum_date, maximum_date)
+    range_key = "sit_date_range"
+    bounds_key = "sit_date_range_bounds"
+
+    if st.session_state.get(bounds_key) != full_range:
+        st.session_state[bounds_key] = full_range
+        st.session_state[range_key] = full_range
+
+    date_column, clear_column = st.sidebar.columns(
+        [8, 1],
+        gap="small",
+        vertical_alignment="bottom",
+    )
+    is_full_range = tuple(st.session_state.get(range_key, full_range)) == full_range
+    selected_range = date_column.date_input(
+        "Sit date range",
+        min_value=minimum_date,
+        max_value=maximum_date,
+        key=range_key,
+        help="Full range means all sit dates.",
+    )
+
+    if clear_column.button(
+        "",
+        key="clear_sit_date_range",
+        help="Show all sit dates",
+        icon=":material/close:",
+        type="tertiary",
+        disabled=is_full_range,
+        on_click=_reset_session_date_range,
+        args=(range_key, full_range),
+    ):
+        pass
+
+    if len(selected_range) == 2:
+        return selected_range
+    return full_range
+
+
+def _reset_session_date_range(range_key: str, full_range: tuple[object, object]) -> None:
+    st.session_state[range_key] = full_range
 
 
 def _overview(frame: pd.DataFrame) -> None:
