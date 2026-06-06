@@ -1,5 +1,6 @@
 """Streamlit dashboard for local pet-sitting analytics snapshots."""
 
+from datetime import date
 from pathlib import Path
 
 import pandas as pd
@@ -14,6 +15,11 @@ from pet_sitting_palantir.analytics.data import (
     load_listing_facts,
     seasonality_frame,
     weekly_opportunity_timeline,
+)
+from pet_sitting_palantir.analytics.snapshot import (
+    DEFAULT_PRODUCTION_SNAPSHOT_PATH,
+    database_url_from_env_file,
+    refresh_production_snapshot,
 )
 
 DEFAULT_DATABASE_PATH = Path(".analytics/demo.duckdb")
@@ -43,18 +49,26 @@ def main() -> None:
     st.set_page_config(page_title="Pet Sitting Analytics", layout="wide")
     st.title("Pet Sitting Analytics")
 
-    database_path = Path(st.sidebar.text_input("DuckDB path", str(DEFAULT_DATABASE_PATH)))
+    data_source, database_path = _database_path_selector()
+    if data_source == "Production snapshot":
+        _production_refresh_controls()
+
     if st.sidebar.button("Reload data"):
         st.cache_data.clear()
+
+    if data_source == "Demo data":
+        st.sidebar.write("")
+        st.sidebar.write("")
+        st.sidebar.write("")
+        st.sidebar.write("")
+        st.sidebar.write("")
+        st.sidebar.write("")
 
     try:
         facts = _load_data(str(database_path))
     except FileNotFoundError:
         st.error(f"Analytics database not found: {database_path}")
-        st.code(
-            "uv --cache-dir .uv-cache run python -m pet_sitting_palantir.analytics "
-            "generate-demo"
-        )
+        _missing_database_command(database_path)
         return
 
     filters = _sidebar_filters(facts)
@@ -98,6 +112,8 @@ def main() -> None:
         auckland_filters = DashboardFilters(
             start_date=filters.start_date,
             end_date=filters.end_date,
+            posted_start_date=filters.posted_start_date,
+            posted_end_date=filters.posted_end_date,
             regions=("Auckland",),
             subregions=("Auckland - Central",),
             cities=(),
@@ -116,20 +132,80 @@ def _load_data(database_path: str) -> pd.DataFrame:
     return load_listing_facts(Path(database_path))
 
 
+def _database_path_selector() -> tuple[str, Path]:
+    source = st.sidebar.selectbox(
+        "Data source",
+        ["Demo data", "Production snapshot", "Custom path"],
+    )
+    if source == "Demo data":
+        return source, DEFAULT_DATABASE_PATH
+    if source == "Production snapshot":
+        return source, DEFAULT_PRODUCTION_SNAPSHOT_PATH
+    return source, Path(st.sidebar.text_input("DuckDB path", str(DEFAULT_DATABASE_PATH)))
+
+
+def _production_refresh_controls() -> None:
+    st.sidebar.divider()
+    confirmed = st.sidebar.checkbox(
+        "I understand this only reads production",
+        value=False,
+        help="Refresh reads production Postgres and overwrites only the local DuckDB snapshot.",
+    )
+    if st.sidebar.button("Refresh from Prod DDBB", disabled=not confirmed):
+        try:
+            with st.spinner("Refreshing local production snapshot..."):
+                database_url = database_url_from_env_file()
+                result = refresh_production_snapshot(database_url=database_url)
+                st.cache_data.clear()
+            st.sidebar.success(f"Refreshed {result.listing_count:,} listings.")
+        except Exception as error:
+            st.sidebar.error(f"Refresh failed: {error}")
+
+
+def _missing_database_command(database_path: Path) -> None:
+    if database_path == DEFAULT_PRODUCTION_SNAPSHOT_PATH:
+        st.code(
+            "uv --cache-dir .uv-cache run python -m pet_sitting_palantir.analytics "
+            "refresh --source production"
+        )
+        return
+
+    st.code(
+        "uv --cache-dir .uv-cache run python -m pet_sitting_palantir.analytics "
+        "generate-demo"
+    )
+
+
 def _sidebar_filters(facts: pd.DataFrame) -> DashboardFilters:
     st.sidebar.header("Filters")
     minimum_date = facts["start_date"].min().date()
     maximum_date = facts["start_date"].max().date()
-    selected_range = st.sidebar.date_input(
+    start_date, end_date = _date_range_filter(
         "Sit date range",
-        value=(minimum_date, maximum_date),
-        min_value=minimum_date,
-        max_value=maximum_date,
+        minimum_date,
+        maximum_date,
+        range_key="sit_date_range",
+        bounds_key="sit_date_range_bounds",
+        clear_key="clear_sit_date_range",
+        clear_help="Show all sit dates",
     )
-    if len(selected_range) == 2:
-        start_date, end_date = selected_range
+
+    first_seen_dates = facts["first_seen_at"].dropna()
+    if first_seen_dates.empty:
+        minimum_posted_date = date.today()
+        maximum_posted_date = date.today()
     else:
-        start_date, end_date = minimum_date, maximum_date
+        minimum_posted_date = first_seen_dates.min().date()
+        maximum_posted_date = first_seen_dates.max().date()
+    posted_start_date, posted_end_date = _date_range_filter(
+        "Date posted",
+        minimum_posted_date,
+        maximum_posted_date,
+        range_key="posted_date_range",
+        bounds_key="posted_date_range_bounds",
+        clear_key="clear_posted_date_range",
+        clear_help="Show all posted dates",
+    )
 
     regions = _multiselect_all("Region", facts["region"])
     subregion_frame = facts if not regions else facts[facts["region"].isin(regions)]
@@ -154,6 +230,8 @@ def _sidebar_filters(facts: pd.DataFrame) -> DashboardFilters:
     return DashboardFilters(
         start_date=start_date,
         end_date=end_date,
+        posted_start_date=posted_start_date,
+        posted_end_date=posted_end_date,
         regions=regions,
         subregions=subregions,
         cities=cities,
@@ -161,6 +239,59 @@ def _sidebar_filters(facts: pd.DataFrame) -> DashboardFilters:
         duration_buckets=duration_buckets,
         statuses=statuses,
     )
+
+
+def _date_range_filter(
+    label: str,
+    minimum_date: date,
+    maximum_date: date,
+    *,
+    range_key: str,
+    bounds_key: str,
+    clear_key: str,
+    clear_help: str,
+) -> tuple[date, date]:
+    full_range = (minimum_date, maximum_date)
+
+    if st.session_state.get(bounds_key) != full_range:
+        st.session_state[bounds_key] = full_range
+        st.session_state[range_key] = []
+    elif tuple(st.session_state.get(range_key, ()) or ()) == full_range:
+        st.session_state[range_key] = []
+
+    date_column, clear_column = st.sidebar.columns(
+        [8, 1],
+        gap="small",
+        vertical_alignment="bottom",
+    )
+    selected_default = st.session_state.get(range_key, [])
+    is_full_range = not selected_default or tuple(selected_default) == full_range
+    selected_range = date_column.date_input(
+        label,
+        min_value=minimum_date,
+        max_value=maximum_date,
+        key=range_key,
+    )
+
+    if clear_column.button(
+        "",
+        key=clear_key,
+        help=clear_help,
+        icon=":material/close:",
+        type="tertiary",
+        disabled=is_full_range,
+        on_click=_reset_session_date_range,
+        args=(range_key,),
+    ):
+        pass
+
+    if selected_range and len(selected_range) == 2:
+        return selected_range
+    return full_range
+
+
+def _reset_session_date_range(range_key: str) -> None:
+    st.session_state[range_key] = []
 
 
 def _overview(frame: pd.DataFrame) -> None:
@@ -184,6 +315,7 @@ def _overview(frame: pd.DataFrame) -> None:
                 title="Listings by region",
             ).update_layout(yaxis={"categoryorder": "total ascending"}),
             width="stretch",
+            key="overview_region_counts",
         )
     with right:
         pet_counts = _count_by(frame, "pet_label", limit=10)
@@ -196,6 +328,7 @@ def _overview(frame: pd.DataFrame) -> None:
                 hole=0.35,
             ),
             width="stretch",
+            key="overview_pet_mix",
         )
 
 
@@ -242,6 +375,7 @@ def _seasonality(frame: pd.DataFrame) -> None:
             title=f"{metric_label} by {interval_label.lower()}",
         ),
         width="stretch",
+        key="seasonality_heatmap",
     )
 
     st.plotly_chart(
@@ -253,6 +387,7 @@ def _seasonality(frame: pd.DataFrame) -> None:
             labels={"period_start": "Period", metric_column: metric_title},
         ),
         width="stretch",
+        key="seasonality_over_time",
     )
 
 
@@ -283,6 +418,7 @@ def _lead_time(frame: pd.DataFrame) -> None:
             labels={"lead_time_days": "Days before sit start"},
         ),
         width="stretch",
+        key="lead_time_distribution",
     )
 
     st.plotly_chart(
@@ -295,6 +431,7 @@ def _lead_time(frame: pd.DataFrame) -> None:
             labels={"duration_bucket": "Sit length", "lead_time_days": "Lead time days"},
         ),
         width="stretch",
+        key="lead_time_by_duration",
     )
 
 
@@ -322,6 +459,7 @@ def _location(frame: pd.DataFrame) -> None:
             title=f"Listings by {level_label.lower()}",
         ).update_layout(yaxis={"categoryorder": "total ascending"}),
         width="stretch",
+        key=f"location_counts_{column}",
     )
 
     stacked = (
@@ -341,6 +479,7 @@ def _location(frame: pd.DataFrame) -> None:
             labels={column: level_label, "pet_label": "Pet type"},
         ),
         width="stretch",
+        key=f"location_pet_mix_{column}",
     )
 
 
@@ -369,6 +508,7 @@ def _auckland_central(frame: pd.DataFrame) -> None:
             labels={"period_start": "Month", "listing_count": "Listings"},
         ),
         width="stretch",
+        key="auckland_listings_over_time",
     )
 
 

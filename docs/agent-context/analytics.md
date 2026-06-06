@@ -78,16 +78,23 @@ reruns the script and redraws the charts.
 
 The intended UI is simple and functional:
 
-- Sidebar filters for data source, date range, location, pet type, and sit
-  length.
+- Sidebar filters for data source, sit date range, date posted, location, pet
+  type, and sit length.
 - Sidebar multi-select filters start empty. An empty selection means "include
   all"; selected values narrow the dataset.
-- The sidebar date range filters by sitting start date. Do not add a global
-  first-seen date filter; first-seen date is only useful for lead-time analysis.
+- The sit date range filters by sitting start date. The date posted range
+  filters by `first_seen_at`, which is the date the scraper first observed the
+  listing.
+- Date range filters use the native Streamlit empty range state for "All"; the
+  adjacent clear button should return the picker to that full-range state.
 - Main page tabs for overview, seasonality, lead time, location, Auckland
   Central, and data explorer.
 - Numeric outputs using metric cards.
 - Interactive Plotly charts for heatmaps, bars, histograms, and distributions.
+- The production-snapshot source may expose a guarded dashboard button to
+  refresh local data from production. This button must only read production
+  Postgres and overwrite the local DuckDB snapshot; it must never write to
+  production.
 
 Avoid spending effort on custom styling unless usability requires it.
 
@@ -98,7 +105,7 @@ Avoid spending effort on custom styling unless usability requires it.
 Show high-level numeric summaries:
 
 - Total listings in the filtered dataset.
-- Listings in the selected date range.
+- Listings in the selected sit date and posted date ranges.
 - Average and median sit length.
 - Average and median lead time.
 - Top regions, subregions, and cities.
@@ -303,34 +310,33 @@ seasonal patterns:
 Generated data should match the analytics-facing columns used from `listings` so
 the same dashboard can run against demo and real data.
 
-## Commands To Add
+## Commands
 
 Use `uv` for command execution.
 
-Suggested commands:
+Core commands:
 
 ```bash
 uv run python -m pet_sitting_palantir.analytics generate-demo
 uv run python -m pet_sitting_palantir.analytics inspect-demo
 uv run python -m pet_sitting_palantir.analytics refresh --source production
-uv run streamlit run analytics/dashboard.py
-```
-
-Small wrapper scripts may be added later for convenience, for example:
-
-```text
-scripts/analytics-generate-demo.sh
-scripts/analytics-refresh.sh
-scripts/analytics-dashboard.sh
+scripts/run-analytics-dashboard.sh
 ```
 
 `inspect-demo` is an intentional lightweight debug command. Keep it available so
 agents and humans can quickly verify the generated DuckDB file without fragile
 inline SQL or shell quoting.
 
-Production refresh must read database credentials from the existing environment
-configuration pattern. Do not hardcode production database URLs in analytics
-code.
+Production refresh must read database credentials from the existing production
+environment file pattern. By default, `refresh --source production` reads
+`DATABASE_URL` from `.env.production`, not the normal repo `.env`, so analytics
+refreshes do not accidentally target local Postgres. Do not hardcode production
+database URLs in analytics code.
+
+The production refresh command writes `.analytics/pet_sitting.duckdb` by copying
+the production `listings` table into the same analytics-facing shape used by the
+demo database. The dashboard should offer a simple data-source selector for
+demo data, production snapshot, and a custom DuckDB path.
 
 ## Implementation Sequence
 

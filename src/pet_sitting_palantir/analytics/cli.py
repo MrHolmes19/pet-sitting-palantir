@@ -7,6 +7,12 @@ from pathlib import Path
 
 import duckdb
 
+from pet_sitting_palantir.analytics.snapshot import (
+    DEFAULT_PRODUCTION_ENV_FILE,
+    DEFAULT_PRODUCTION_SNAPSHOT_PATH,
+    database_url_from_env_file,
+    refresh_production_snapshot,
+)
 from pet_sitting_palantir.analytics.synthetic import (
     DEFAULT_DEMO_DATABASE_PATH,
     DEFAULT_LISTING_COUNT,
@@ -30,6 +36,14 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "inspect-demo":
         inspect_demo_database(path=args.path, limit=args.limit)
+        return 0
+
+    if args.command == "refresh":
+        if args.source != "production":
+            raise ValueError(f"Unsupported analytics refresh source: {args.source}")
+        database_url = database_url_from_env_file(args.env_file)
+        result = refresh_production_snapshot(output_path=args.output, database_url=database_url)
+        print(dumps(result.to_dict(), indent=2, sort_keys=True, default=str))
         return 0
 
     raise ValueError(f"Unsupported analytics command: {args.command}")
@@ -116,6 +130,35 @@ def _parse_args(argv: Sequence[str] | None) -> Namespace:
         type=_positive_int,
         default=10,
         help="Number of sample listings to print. Defaults to 10.",
+    )
+
+    refresh = subparsers.add_parser(
+        "refresh",
+        help="Refresh a local analytics snapshot from a source database.",
+    )
+    refresh.add_argument(
+        "--source",
+        choices=("production",),
+        required=True,
+        help="Source to refresh from.",
+    )
+    refresh.add_argument(
+        "--output",
+        type=Path,
+        default=DEFAULT_PRODUCTION_SNAPSHOT_PATH,
+        help=(
+            "Destination DuckDB database path. "
+            f"Defaults to {DEFAULT_PRODUCTION_SNAPSHOT_PATH}."
+        ),
+    )
+    refresh.add_argument(
+        "--env-file",
+        type=Path,
+        default=DEFAULT_PRODUCTION_ENV_FILE,
+        help=(
+            "Production env file containing DATABASE_URL. "
+            f"Defaults to {DEFAULT_PRODUCTION_ENV_FILE}."
+        ),
     )
 
     return parser.parse_args(argv)
