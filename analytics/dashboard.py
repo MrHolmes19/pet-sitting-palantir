@@ -1,5 +1,6 @@
 """Streamlit dashboard for local pet-sitting analytics snapshots."""
 
+from datetime import date
 from pathlib import Path
 
 import pandas as pd
@@ -111,6 +112,8 @@ def main() -> None:
         auckland_filters = DashboardFilters(
             start_date=filters.start_date,
             end_date=filters.end_date,
+            posted_start_date=filters.posted_start_date,
+            posted_end_date=filters.posted_end_date,
             regions=("Auckland",),
             subregions=("Auckland - Central",),
             cities=(),
@@ -177,7 +180,32 @@ def _sidebar_filters(facts: pd.DataFrame) -> DashboardFilters:
     st.sidebar.header("Filters")
     minimum_date = facts["start_date"].min().date()
     maximum_date = facts["start_date"].max().date()
-    start_date, end_date = _date_range_filter(minimum_date, maximum_date)
+    start_date, end_date = _date_range_filter(
+        "Sit date range",
+        minimum_date,
+        maximum_date,
+        range_key="sit_date_range",
+        bounds_key="sit_date_range_bounds",
+        clear_key="clear_sit_date_range",
+        clear_help="Show all sit dates",
+    )
+
+    first_seen_dates = facts["first_seen_at"].dropna()
+    if first_seen_dates.empty:
+        minimum_posted_date = date.today()
+        maximum_posted_date = date.today()
+    else:
+        minimum_posted_date = first_seen_dates.min().date()
+        maximum_posted_date = first_seen_dates.max().date()
+    posted_start_date, posted_end_date = _date_range_filter(
+        "Date posted",
+        minimum_posted_date,
+        maximum_posted_date,
+        range_key="posted_date_range",
+        bounds_key="posted_date_range_bounds",
+        clear_key="clear_posted_date_range",
+        clear_help="Show all posted dates",
+    )
 
     regions = _multiselect_all("Region", facts["region"])
     subregion_frame = facts if not regions else facts[facts["region"].isin(regions)]
@@ -202,6 +230,8 @@ def _sidebar_filters(facts: pd.DataFrame) -> DashboardFilters:
     return DashboardFilters(
         start_date=start_date,
         end_date=end_date,
+        posted_start_date=posted_start_date,
+        posted_end_date=posted_end_date,
         regions=regions,
         subregions=subregions,
         cities=cities,
@@ -211,48 +241,57 @@ def _sidebar_filters(facts: pd.DataFrame) -> DashboardFilters:
     )
 
 
-def _date_range_filter(minimum_date: object, maximum_date: object) -> tuple[object, object]:
+def _date_range_filter(
+    label: str,
+    minimum_date: date,
+    maximum_date: date,
+    *,
+    range_key: str,
+    bounds_key: str,
+    clear_key: str,
+    clear_help: str,
+) -> tuple[date, date]:
     full_range = (minimum_date, maximum_date)
-    range_key = "sit_date_range"
-    bounds_key = "sit_date_range_bounds"
 
     if st.session_state.get(bounds_key) != full_range:
         st.session_state[bounds_key] = full_range
-        st.session_state[range_key] = full_range
+        st.session_state[range_key] = []
+    elif tuple(st.session_state.get(range_key, ()) or ()) == full_range:
+        st.session_state[range_key] = []
 
     date_column, clear_column = st.sidebar.columns(
         [8, 1],
         gap="small",
         vertical_alignment="bottom",
     )
-    is_full_range = tuple(st.session_state.get(range_key, full_range)) == full_range
+    selected_default = st.session_state.get(range_key, [])
+    is_full_range = not selected_default or tuple(selected_default) == full_range
     selected_range = date_column.date_input(
-        "Sit date range",
+        label,
         min_value=minimum_date,
         max_value=maximum_date,
         key=range_key,
-        help="Full range means all sit dates.",
     )
 
     if clear_column.button(
         "",
-        key="clear_sit_date_range",
-        help="Show all sit dates",
+        key=clear_key,
+        help=clear_help,
         icon=":material/close:",
         type="tertiary",
         disabled=is_full_range,
         on_click=_reset_session_date_range,
-        args=(range_key, full_range),
+        args=(range_key,),
     ):
         pass
 
-    if len(selected_range) == 2:
+    if selected_range and len(selected_range) == 2:
         return selected_range
     return full_range
 
 
-def _reset_session_date_range(range_key: str, full_range: tuple[object, object]) -> None:
-    st.session_state[range_key] = full_range
+def _reset_session_date_range(range_key: str) -> None:
+    st.session_state[range_key] = []
 
 
 def _overview(frame: pd.DataFrame) -> None:

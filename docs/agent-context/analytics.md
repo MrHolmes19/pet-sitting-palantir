@@ -78,12 +78,15 @@ reruns the script and redraws the charts.
 
 The intended UI is simple and functional:
 
-- Sidebar filters for data source, date range, location, pet type, and sit
-  length.
+- Sidebar filters for data source, sit date range, date posted, location, pet
+  type, and sit length.
 - Sidebar multi-select filters start empty. An empty selection means "include
   all"; selected values narrow the dataset.
-- The sidebar date range filters by sitting start date. Do not add a global
-  first-seen date filter; first-seen date is only useful for lead-time analysis.
+- The sit date range filters by sitting start date. The date posted range
+  filters by `first_seen_at`, which is the date the scraper first observed the
+  listing.
+- Date range filters use the native Streamlit empty range state for "All"; the
+  adjacent clear button should return the picker to that full-range state.
 - Main page tabs for overview, seasonality, lead time, location, Auckland
   Central, and data explorer.
 - Numeric outputs using metric cards.
@@ -102,7 +105,7 @@ Avoid spending effort on custom styling unless usability requires it.
 Show high-level numeric summaries:
 
 - Total listings in the filtered dataset.
-- Listings in the selected date range.
+- Listings in the selected sit date and posted date ranges.
 - Average and median sit length.
 - Average and median lead time.
 - Top regions, subregions, and cities.

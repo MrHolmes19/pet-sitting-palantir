@@ -39,6 +39,8 @@ class DashboardFilters:
 
     start_date: date
     end_date: date
+    posted_start_date: date
+    posted_end_date: date
     regions: tuple[str, ...]
     subregions: tuple[str, ...]
     cities: tuple[str, ...]
@@ -126,6 +128,13 @@ def filter_listing_facts(facts: pd.DataFrame, filters: DashboardFilters) -> pd.D
     filtered = filtered[
         (filtered["start_date"] >= start_timestamp)
         & (filtered["start_date"] < end_timestamp)
+    ]
+
+    posted_start_timestamp = pd.Timestamp(filters.posted_start_date)
+    posted_end_timestamp = pd.Timestamp(filters.posted_end_date) + pd.Timedelta(days=1)
+    filtered = filtered[
+        (filtered["first_seen_at"] >= posted_start_timestamp)
+        & (filtered["first_seen_at"] < posted_end_timestamp)
     ]
 
     filtered = _filter_in(filtered, "region", filters.regions)

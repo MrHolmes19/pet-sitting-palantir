@@ -46,6 +46,8 @@ def test_filter_listing_facts_applies_sidebar_filters() -> None:
     filters = DashboardFilters(
         start_date=date(2026, 1, 1),
         end_date=date(2026, 1, 31),
+        posted_start_date=date(2025, 1, 1),
+        posted_end_date=date(2026, 12, 31),
         regions=("Auckland",),
         subregions=(),
         cities=(),
@@ -59,11 +61,33 @@ def test_filter_listing_facts_applies_sidebar_filters() -> None:
     assert filtered["external_id"].tolist() == ["one"]
 
 
+def test_filter_listing_facts_applies_posted_date_range() -> None:
+    facts = prepare_listing_facts(_sample_listings())
+    filters = DashboardFilters(
+        start_date=date(2026, 1, 1),
+        end_date=date(2026, 12, 31),
+        posted_start_date=date(2026, 1, 1),
+        posted_end_date=date(2026, 1, 31),
+        regions=(),
+        subregions=(),
+        cities=(),
+        pet_labels=(),
+        duration_buckets=(),
+        statuses=(),
+    )
+
+    filtered = filter_listing_facts(facts, filters)
+
+    assert filtered["external_id"].tolist() == ["two"]
+
+
 def test_empty_filter_values_include_all_values() -> None:
     facts = prepare_listing_facts(_sample_listings())
     filters = DashboardFilters(
         start_date=date(2026, 1, 1),
         end_date=date(2026, 12, 31),
+        posted_start_date=date(2025, 1, 1),
+        posted_end_date=date(2026, 12, 31),
         regions=(),
         subregions=(),
         cities=(),
