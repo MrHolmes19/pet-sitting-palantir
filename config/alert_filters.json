@@ -1,7 +1,7 @@
 {
   "filters": [
     {
-      "name": "-- MICHI SEÑAL -- Post Grisesitos",
+      "name": "-- MICHI SEÑAL -- Post Penny",
       "site_filter": {
         "state": "north-island",
         "region": "auckland",
@@ -9,8 +9,8 @@
       },
       "local_filter": {
         "date_window_match": "contained",
-        "start_date_on_or_after": "2026-09-11",
-        "end_date_on_or_before": "2026-12-23",
+        "start_date_on_or_after": "2026-10-09",
+        "end_date_on_or_before": "2026-11-02",
         "min_duration_days": 15,
         "cats_allowed": true
       }
@@ -24,8 +24,8 @@
       },
       "local_filter": {
         "date_window_match": "contained",
-        "start_date_on_or_after": "2026-09-11",
-        "end_date_on_or_before": "2027-02-28",
+        "start_date_on_or_after": "2026-12-18",
+        "end_date_on_or_before": "2027-04-10",
         "min_duration_days": 29,
         "dogs_allowed": true,
         "cats_allowed": true,
@@ -37,7 +37,7 @@
       }
     },
     {
-      "name": "-- End of year - Long runs",
+      "name": "-- Beginning of 2027",
       "site_filter": {
         "state": "north-island",
         "region": "auckland",
@@ -45,9 +45,9 @@
       },
       "local_filter": {
         "date_window_match": "contained",
-        "start_date_on_or_after": "2026-11-13",
+        "start_date_on_or_after": "2026-12-26",
         "end_date_on_or_before": "2027-02-28",
-        "min_duration_days": 29,
+        "min_duration_days": 14,
         "dogs_allowed": true,
         "cats_allowed": true,
         "fish_allowed": true,
@@ -57,7 +57,7 @@
       }
     },
     {
-      "name": "-- Post grisesitos",
+      "name": "-- Post Penny",
       "site_filter": {
         "state": "north-island",
         "region": "auckland",
@@ -65,9 +65,9 @@
       },
       "local_filter": {
         "date_window_match": "contained",
-        "start_date_on_or_after": "2026-09-11",
-        "end_date_on_or_before": "2026-12-18",
-        "min_duration_days": 15,
+        "start_date_on_or_after": "2026-10-09",
+        "end_date_on_or_before": "2026-11-02",
+        "min_duration_days": 7,
         "dogs_allowed": true,
         "cats_allowed": true,
         "fish_allowed": true,
@@ -77,7 +77,7 @@
       }
     },
     {
-      "name": "-- Post grisesitos - North Shore",
+      "name": "-- Post Penny - North Shore",
       "site_filter": {
         "state": "north-island",
         "region": "auckland",
@@ -85,9 +85,44 @@
       },
       "local_filter": {
         "date_window_match": "contained",
-        "start_date_on_or_after": "2026-09-11",
-        "end_date_on_or_before": "2026-12-01",
-        "min_duration_days": 15,
+        "start_date_on_or_after": "2026-10-09",
+        "end_date_on_or_before": "2026-11-02",
+        "min_duration_days": 7,
+        "dogs_allowed": true,
+        "cats_allowed": true,
+        "fish_allowed": true,
+        "birds_allowed": true,
+        "rabbits_guinea_pigs_allowed": true,
+        "no_pets_allowed": true
+      }
+    },
+    {
+      "name": "-- MICHI SEÑAL 2027 -- Post Penny",
+      "site_filter": {
+        "state": "north-island",
+        "region": "auckland",
+        "subregion": "auckland-central"
+      },
+      "local_filter": {
+        "date_window_match": "contained",
+        "start_date_on_or_after": "2027-01-01",
+        "end_date_on_or_before": "2027-03-30",
+        "min_duration_days": 14,
+        "cats_allowed": true
+      }
+    },
+    {
+      "name": "-- Connection in January",
+      "site_filter": {
+        "state": "north-island",
+        "region": "auckland",
+        "subregion": "auckland-central"
+      },
+      "local_filter": {
+        "date_window_match": "contained",
+        "start_date_on_or_after": "2027-01-03",
+        "end_date_on_or_before": "2027-01-20",
+        "min_duration_days": 7,
         "dogs_allowed": true,
         "cats_allowed": true,
         "fish_allowed": true,
