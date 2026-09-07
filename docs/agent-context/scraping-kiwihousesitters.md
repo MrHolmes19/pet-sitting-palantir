@@ -98,8 +98,16 @@ updates are based on complete scope coverage. Non-persisting local inspection
 runs may pass a numeric `--max-pages` to limit site load while testing.
 
 The client applies the minimum request delay defined in
-`src/pet_sitting_palantir/settings.py`. The selected production value is `0.5`
-seconds between requests; change it deliberately only after an end-to-end run.
+`src/pet_sitting_palantir/settings.py`. The selected production value is `1.5`
+seconds between requests. The previous `0.5`-second pace began receiving
+repeatable Cloudflare `429 Too Many Requests` responses after ten requests.
+
+Transient connection failures and upstream `408`/`5xx` responses receive a
+small bounded retry with exponential backoff. A `429` is not retried inside the
+same scrape: the scope fails safely and the scheduler applies its scope-level
+failure cooldown. This avoids turning a rate limit into an immediate request
+burst. The diagnostic error includes the response's `Retry-After` value when
+one is supplied.
 
 ## Search Result Cap And Splitting
 

@@ -121,9 +121,7 @@ def read_healthcheck_summary(
 ) -> HealthcheckSummary:
     """Read the database counters used by the daily health notification."""
     generated_at = _local_time(current_time)
-    since = generated_at.astimezone(UTC) - timedelta(
-        hours=HOME_RUNNER_HEALTHCHECK_LOOKBACK_HOURS
-    )
+    since = generated_at.astimezone(UTC) - timedelta(hours=HOME_RUNNER_HEALTHCHECK_LOOKBACK_HOURS)
 
     with connection.cursor() as cursor:
         cursor.execute(
@@ -210,7 +208,7 @@ def format_healthcheck_message(summary: HealthcheckSummary) -> str:
                 f"Total: {summary.successful_runs} scans, "
                 f"{summary.new_listings} new, {summary.changed_listings} changed"
             ),
-            f"Failures: {summary.failed_runs}",
+            f"Failed scan attempts: {summary.failed_runs}",
         )
     )
 
@@ -259,6 +257,4 @@ def _provider_message_id_text(result: NotificationDispatchSummary) -> str | None
 def _dispatch_error_text(result: NotificationDispatchSummary) -> str | None:
     if not result.failures:
         return None
-    return "; ".join(
-        f"{failure.channel}: {failure.error_message}" for failure in result.failures
-    )
+    return "; ".join(f"{failure.channel}: {failure.error_message}" for failure in result.failures)

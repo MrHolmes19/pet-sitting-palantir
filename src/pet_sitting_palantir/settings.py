@@ -7,10 +7,15 @@ from datetime import time
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-# Minimum pause between KiwiHouseSitters HTTP requests; increasing it reduces site load.
-KIWIHOUSESITTERS_REQUEST_INTERVAL_SECONDS = 0.5
+# Minimum pause between KiwiHouseSitters HTTP requests. The site began returning
+# Cloudflare 429 responses after ten requests at the previous 0.5-second pace.
+KIWIHOUSESITTERS_REQUEST_INTERVAL_SECONDS = 1.5
 # Maximum time to wait for one KiwiHouseSitters HTTP response before failing the scope.
 KIWIHOUSESITTERS_TIMEOUT_SECONDS = 20
+# Additional attempts for transient connection failures and upstream 5xx responses.
+KIWIHOUSESITTERS_TRANSIENT_RETRY_ATTEMPTS = 2
+# Initial delay for transient retries; each subsequent retry doubles this value.
+KIWIHOUSESITTERS_TRANSIENT_RETRY_BACKOFF_SECONDS = 5
 # Maximum time to wait for a Telegram delivery request before retrying on a later tick.
 TELEGRAM_TIMEOUT_SECONDS = 15
 
@@ -25,6 +30,9 @@ POSTGRES_KEEPALIVES_COUNT = 3
 
 # How frequently the home runner checks the database for due scrape scopes.
 HOME_RUNNER_TICK_INTERVAL_SECONDS = 5 * 60
+# Maximum wait before retrying an overdue scope whose latest direct attempt failed.
+# Short-cadence scopes retain their configured cadence; broad scopes cool down longer.
+SCRAPE_FAILURE_RETRY_MAX_MINUTES = 60
 # Process lock path used to prevent two production home runners running together.
 HOME_RUNNER_LOCK_FILE = Path("/tmp/pet-sitting-palantir-home-runner.lock")
 # Local time when the home runner sends its daily operational health notification.

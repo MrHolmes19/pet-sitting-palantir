@@ -89,7 +89,11 @@ python -m pet_sitting_palantir --run-continuously --max-pages all
   example, an island-level 12-hour scope does not become due just because the
   runner restarted after a shorter outage.
 - Network or database connectivity failures are logged at `ERROR` level and the
-  process keeps running; the next 5-minute tick attempts recovery.
+  process keeps running. Failed scopes remain overdue, but their latest direct
+  attempt starts a retry cooldown: short-cadence scopes retain their configured
+  cadence and scopes with intervals over 60 minutes retry at most hourly. A
+  cooling-down broad scope does not suppress ready narrower scopes, so failed
+  nationwide work cannot monopolize Auckland alert ticks.
 - Every tick logs start and completion at `INFO` level, including ticks that
   perform no scrape because nothing is due or quiet hours apply. If a start log
   appears without completion, investigate a blocked database or scrape request.
@@ -120,7 +124,7 @@ For the initial private-chat Telegram destination, create a bot through
 that chat's id from the Bot API `getUpdates` response, and add the token and
 chat id only to `.env.production`.
 
-Code-owned operational values such as request pacing (`0.5` seconds), the
+Code-owned operational values such as request pacing (`1.5` seconds), the
 five-minute tick, quiet hours, and PostgreSQL connection failure limits live in
 `src/pet_sitting_palantir/settings.py`.
 

@@ -80,9 +80,7 @@ def test_tick_logs_scope_failure_detail(caplog) -> None:
     )
 
     assert "tick_failed due=1 failed=1" in caplog.text
-    assert "scope_fail name=all_nz error=Unexpected status code: 403" in (
-        caplog.text
-    )
+    assert "scope_fail name=all_nz error=Unexpected status code: 403" in (caplog.text)
 
 
 def test_tick_logs_successful_scope_detail(caplog) -> None:
@@ -116,8 +114,7 @@ def test_tick_logs_successful_scope_detail(caplog) -> None:
     )
 
     assert (
-        "scope_ok name=auckland_central "
-        "pages=2 listings=36 new=1 changed=2 missing=0 alerts=1"
+        "scope_ok name=auckland_central pages=2 listings=36 new=1 changed=2 missing=0 alerts=1"
     ) in caplog.text
     assert (
         "alert_queued filter=test filter type=first_match listing=614587 "
@@ -237,7 +234,7 @@ def test_runner_startup_logs_selected_request_interval(monkeypatch, caplog, tmp_
 
     run_home_runner(lock_file=tmp_path / "home-runner.lock")
 
-    assert "runner_start tick=300s request_delay=0.5s" in caplog.text
+    assert "runner_start tick=300s request_delay=1.5s" in caplog.text
 
 
 def test_single_instance_lock_rejects_parallel_runner(tmp_path) -> None:

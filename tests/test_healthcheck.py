@@ -40,7 +40,7 @@ def test_formats_healthcheck_with_scan_counts_and_freshness() -> None:
             "- auckland_region: 18",
             "- north_shore_city: 90",
             "Total: 306 scans, 4 new, 9 changed",
-            "Failures: 1",
+            "Failed scan attempts: 1",
         )
     )
 

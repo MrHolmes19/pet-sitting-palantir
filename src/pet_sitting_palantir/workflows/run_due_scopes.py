@@ -2,7 +2,7 @@
 
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from psycopg import Connection
@@ -11,6 +11,7 @@ from pet_sitting_palantir.settings import (
     NEW_ZEALAND_TIME_ZONE,
     QUIET_HOURS_END,
     QUIET_HOURS_START,
+    SCRAPE_FAILURE_RETRY_MAX_MINUTES,
 )
 from pet_sitting_palantir.storage import ScrapeScope, connect_database, read_due_scrape_scopes
 from pet_sitting_palantir.workflows.scrape_and_store import (
@@ -55,7 +56,8 @@ def run_due_scrape_scopes(
     current_time: datetime | None = None,
 ) -> DueScopeRunResult:
     """Run every enabled scrape scope that is currently due."""
-    if _is_quiet_hours(current_time):
+    instant = current_time or datetime.now(tz=UTC)
+    if _is_quiet_hours(instant):
         return DueScopeRunResult(
             status="quiet_hours",
             scopes_due=0,
@@ -71,6 +73,7 @@ def run_due_scrape_scopes(
             connection,
             max_pages=max_pages,
             scraper=scraper,
+            current_time=instant,
         )
     finally:
         connection.close()
@@ -81,9 +84,16 @@ def run_due_scrape_scopes_with_connection(
     *,
     max_pages: int | None = None,
     scraper: Scraper | None = None,
+    current_time: datetime | None = None,
 ) -> DueScopeRunResult:
     """Run due scopes using an existing database connection."""
-    due_scopes = _select_broadest_due_scopes(read_due_scrape_scopes(connection))
+    instant = current_time or datetime.now(tz=UTC)
+    due_scopes = _select_broadest_due_scopes(
+        _scopes_ready_for_attempt(
+            read_due_scrape_scopes(connection),
+            current_time=instant,
+        )
+    )
     results: list[StoredScrapeResult] = []
     failures: list[DueScopeFailure] = []
 
@@ -142,6 +152,39 @@ def _select_broadest_due_scopes(scopes: Sequence[ScrapeScope]) -> tuple[ScrapeSc
         for scope in scopes
         if not any(_scope_is_broader_than(other, scope) for other in scopes)
     )
+
+
+def _scopes_ready_for_attempt(
+    scopes: Sequence[ScrapeScope],
+    *,
+    current_time: datetime,
+) -> tuple[ScrapeScope, ...]:
+    """Exclude recently failed scopes without treating their coverage as fresh."""
+    if current_time.tzinfo is None:
+        raise ValueError("current_time must include a timezone")
+
+    return tuple(
+        scope
+        for scope in scopes
+        if not _scope_is_in_failure_cooldown(scope, current_time=current_time)
+    )
+
+
+def _scope_is_in_failure_cooldown(
+    scope: ScrapeScope,
+    *,
+    current_time: datetime,
+) -> bool:
+    if scope.last_attempt_at is None:
+        return False
+    if scope.last_success_at is not None and scope.last_attempt_at <= scope.last_success_at:
+        return False
+
+    retry_minutes = min(
+        scope.interval_minutes,
+        SCRAPE_FAILURE_RETRY_MAX_MINUTES,
+    )
+    return current_time < scope.last_attempt_at + timedelta(minutes=retry_minutes)
 
 
 def _scope_is_broader_than(parent: ScrapeScope, child: ScrapeScope) -> bool:

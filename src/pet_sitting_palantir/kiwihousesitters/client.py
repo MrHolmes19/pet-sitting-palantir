@@ -21,7 +21,11 @@ from pet_sitting_palantir.kiwihousesitters.constants import (
 from pet_sitting_palantir.settings import (
     KIWIHOUSESITTERS_REQUEST_INTERVAL_SECONDS,
     KIWIHOUSESITTERS_TIMEOUT_SECONDS,
+    KIWIHOUSESITTERS_TRANSIENT_RETRY_ATTEMPTS,
+    KIWIHOUSESITTERS_TRANSIENT_RETRY_BACKOFF_SECONDS,
 )
+
+RETRYABLE_STATUS_CODES = frozenset({408, 500, 502, 503, 504})
 
 
 @dataclass(frozen=True)
@@ -45,15 +49,23 @@ class KiwiHouseSittersClient:
         *,
         timeout_seconds: int = KIWIHOUSESITTERS_TIMEOUT_SECONDS,
         request_interval_seconds: float = KIWIHOUSESITTERS_REQUEST_INTERVAL_SECONDS,
+        transient_retry_attempts: int = KIWIHOUSESITTERS_TRANSIENT_RETRY_ATTEMPTS,
+        transient_retry_backoff_seconds: float = (KIWIHOUSESITTERS_TRANSIENT_RETRY_BACKOFF_SECONDS),
         user_agent: str = DEFAULT_USER_AGENT,
         clock: Callable[[], float] = monotonic,
         sleep_for: Callable[[float], None] = sleep,
         session_factory: Callable[[], requests.Session] = requests.Session,
     ) -> None:
         _validate_request_interval_seconds(request_interval_seconds)
+        _validate_retry_settings(
+            attempts=transient_retry_attempts,
+            backoff_seconds=transient_retry_backoff_seconds,
+        )
 
         self._timeout_seconds = timeout_seconds
         self._request_interval_seconds = request_interval_seconds
+        self._transient_retry_attempts = transient_retry_attempts
+        self._transient_retry_backoff_seconds = transient_retry_backoff_seconds
         self._clock = clock
         self._sleep_for = sleep_for
         self._last_request_started_at: float | None = None
@@ -69,30 +81,24 @@ class KiwiHouseSittersClient:
         headers: Mapping[str, str] | None = None,
     ) -> str:
         """Fetch one HTML page and raise for non-success responses."""
-        self._wait_for_request_slot()
-        self._requests_started += 1
-        response = self._session.get(
-            url,
-            headers=headers,
-            timeout=self._timeout_seconds,
-        )
-
-        return _text_from_ok_response(
-            response,
+        return self._request_html(
             method="GET",
-            request_number=self._requests_started,
+            request=lambda: self._session.get(
+                url,
+                headers=headers,
+                timeout=self._timeout_seconds,
+            ),
         )
 
     def post_html(self, url: str, *, data: Mapping[str, Any]) -> str:
         """POST one HTML form request and raise for non-success responses."""
-        self._wait_for_request_slot()
-        self._requests_started += 1
-        response = self._session.post(url, data=data, timeout=self._timeout_seconds)
-
-        return _text_from_ok_response(
-            response,
+        return self._request_html(
             method="POST",
-            request_number=self._requests_started,
+            request=lambda: self._session.post(
+                url,
+                data=data,
+                timeout=self._timeout_seconds,
+            ),
         )
 
     def fetch_search_pages(
@@ -154,12 +160,45 @@ class KiwiHouseSittersClient:
         session.headers.update({**DEFAULT_REQUEST_HEADERS, "User-Agent": self._user_agent})
         return session
 
+    def _request_html(
+        self,
+        *,
+        method: str,
+        request: Callable[[], requests.Response],
+    ) -> str:
+        for retry_number in range(self._transient_retry_attempts + 1):
+            self._wait_for_request_slot()
+            self._requests_started += 1
+            try:
+                response = request()
+            except requests.ConnectionError, requests.Timeout:
+                if retry_number >= self._transient_retry_attempts:
+                    raise
+                self._wait_before_retry(retry_number)
+                continue
+
+            if response.status_code == HTTP_OK_STATUS:
+                return response.text
+            if (
+                response.status_code not in RETRYABLE_STATUS_CODES
+                or retry_number >= self._transient_retry_attempts
+            ):
+                return _text_from_ok_response(
+                    response,
+                    method=method,
+                    request_number=self._requests_started,
+                )
+            self._wait_before_retry(retry_number)
+
+        raise AssertionError("transient retry loop ended unexpectedly")
+
+    def _wait_before_retry(self, retry_number: int) -> None:
+        self._sleep_for(self._transient_retry_backoff_seconds * (2**retry_number))
+
     def _wait_for_request_slot(self) -> None:
         now = self._clock()
         if self._last_request_started_at is not None:
-            remaining_delay = (
-                self._request_interval_seconds - (now - self._last_request_started_at)
-            )
+            remaining_delay = self._request_interval_seconds - (now - self._last_request_started_at)
             if remaining_delay > 0:
                 self._sleep_for(remaining_delay)
                 now = self._clock()
@@ -170,6 +209,13 @@ class KiwiHouseSittersClient:
 def _validate_request_interval_seconds(interval_seconds: float) -> None:
     if interval_seconds < 0:
         raise ValueError("request_interval_seconds must not be negative")
+
+
+def _validate_retry_settings(*, attempts: int, backoff_seconds: float) -> None:
+    if attempts < 0:
+        raise ValueError("transient_retry_attempts must not be negative")
+    if backoff_seconds < 0:
+        raise ValueError("transient_retry_backoff_seconds must not be negative")
 
 
 def _text_from_ok_response(
@@ -203,6 +249,7 @@ def _response_error_message(
         f"url={response.url or 'unknown'}; "
         f"content_type={response.headers.get('content-type', 'unknown')}; "
         f"server={response.headers.get('server', 'unknown')}; "
+        f"retry_after={response.headers.get('retry-after', 'unknown')}; "
         f"body_snippet={_body_snippet(response.text)}"
     )
 

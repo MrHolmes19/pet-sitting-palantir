@@ -32,12 +32,18 @@ For every enabled scope:
 ```text
 run_due = last_success_at is null
           or now - last_success_at >= interval_minutes
+
+run_ready = run_due
+            and no newer failed direct attempt is still in its retry cooldown
 ```
 
 Use `last_success_at`, not `last_attempt_at`, so failed runs do not falsely
-advance the schedule. `last_success_at` means the scope was freshly covered by
-a successful complete scrape: a successful broader scope also advances covered
-narrower scopes. `last_attempt_at` records only direct requests for that scope.
+advance freshness. `last_success_at` means the scope was freshly covered by a
+successful complete scrape: a successful broader scope also advances covered
+narrower scopes. `last_attempt_at` records only direct requests for that scope
+and prevents an overdue failed scope from retrying more often than its failure
+cooldown. The cooldown equals the scope interval, capped at 60 minutes, so
+five-minute Auckland recovery remains fast while failed broad work backs off.
 
 The implementation allows a small scheduler grace window before the exact
 interval boundary. External schedulers do not start on exact seconds, and without
@@ -47,7 +53,9 @@ previous successful run finished a few seconds after the previous tick.
 ## Overlapping Scope Selection
 
 When multiple overlapping scopes are due in one invocation, run only the
-broadest applicable scope.
+broadest applicable scope that is ready for an attempt. A broad scope in failure
+cooldown is excluded before overlap selection, allowing ready narrower scopes
+to run.
 
 Examples:
 

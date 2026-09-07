@@ -31,7 +31,9 @@ create index scrape_scopes_enabled_due_idx
   on scrape_scopes (enabled, last_success_at);
 ```
 
-`last_attempt_at` records a direct request for that configured scope.
+`last_attempt_at` records a direct request for that configured scope. It does
+not make coverage fresh, but the scheduler uses it to enforce a bounded failure
+retry cooldown when it is newer than `last_success_at`.
 `last_success_at` records the latest complete successful coverage for the
 scope, whether produced directly or by a successful broader containing scope.
 Use actual completion timestamps rather than transaction-start timestamps for
