@@ -1,9 +1,10 @@
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from pet_sitting_palantir.storage import ScrapeScope
 from pet_sitting_palantir.workflows.run_due_scopes import (
     DueScopeRunResult,
+    _scopes_ready_for_attempt,
     _select_broadest_due_scopes,
     run_due_scrape_scopes,
 )
@@ -69,7 +70,7 @@ def test_run_due_scrape_scopes_resumes_at_six_am_new_zealand_time(monkeypatch) -
     )
     monkeypatch.setattr(
         "pet_sitting_palantir.workflows.run_due_scopes.run_due_scrape_scopes_with_connection",
-        lambda connection, max_pages, scraper: expected_result,
+        lambda connection, max_pages, scraper, current_time: expected_result,
     )
 
     result = run_due_scrape_scopes(
@@ -131,14 +132,72 @@ def test_select_broadest_due_scopes_prefers_due_region_over_due_subregions() -> 
     assert [scope.name for scope in selected] == ["auckland_region", "wellington"]
 
 
-def _scope(name: str, site_filter: dict[str, str]) -> ScrapeScope:
+def test_recently_failed_broad_scope_cools_down_without_hiding_narrow_scope() -> None:
+    now = datetime(2026, 9, 8, 10, 0, tzinfo=UTC)
+    all_nz = _scope(
+        "all_nz",
+        {},
+        interval_minutes=1440,
+        last_attempt_at=now - timedelta(minutes=5),
+        last_success_at=now - timedelta(days=2),
+    )
+    auckland_central = _scope(
+        "auckland_central",
+        {"state": "north-island", "region": "auckland", "subregion": "auckland-central"},
+        interval_minutes=5,
+        last_attempt_at=now - timedelta(minutes=10),
+        last_success_at=now - timedelta(minutes=15),
+    )
+
+    ready = _scopes_ready_for_attempt(
+        (auckland_central, all_nz),
+        current_time=now,
+    )
+    selected = _select_broadest_due_scopes(ready)
+
+    assert [scope.name for scope in selected] == ["auckland_central"]
+
+
+def test_failed_broad_scope_becomes_ready_after_maximum_cooldown() -> None:
+    now = datetime(2026, 9, 8, 10, 0, tzinfo=UTC)
+    all_nz = _scope(
+        "all_nz",
+        {},
+        interval_minutes=1440,
+        last_attempt_at=now - timedelta(minutes=60),
+        last_success_at=now - timedelta(days=2),
+    )
+
+    assert _scopes_ready_for_attempt((all_nz,), current_time=now) == (all_nz,)
+
+
+def test_successful_scope_is_not_put_in_failure_cooldown() -> None:
+    now = datetime(2026, 9, 8, 10, 0, tzinfo=UTC)
+    scope = _scope(
+        "auckland_central",
+        {"state": "north-island", "region": "auckland", "subregion": "auckland-central"},
+        last_attempt_at=now - timedelta(minutes=6),
+        last_success_at=now - timedelta(minutes=5),
+    )
+
+    assert _scopes_ready_for_attempt((scope,), current_time=now) == (scope,)
+
+
+def _scope(
+    name: str,
+    site_filter: dict[str, str],
+    *,
+    interval_minutes: int = 5,
+    last_attempt_at: datetime | None = None,
+    last_success_at: datetime | None = None,
+) -> ScrapeScope:
     return ScrapeScope(
         id=1,
         name=name,
         enabled=True,
-        interval_minutes=5,
+        interval_minutes=interval_minutes,
         missing_threshold_runs=3,
         site_filter=site_filter,
-        last_attempt_at=None,
-        last_success_at=None,
+        last_attempt_at=last_attempt_at,
+        last_success_at=last_success_at,
     )

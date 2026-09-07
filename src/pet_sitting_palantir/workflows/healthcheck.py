@@ -19,6 +19,10 @@ from pet_sitting_palantir.storage import connect_database
 
 NotificationSender = Callable[[AlertMessage], NotificationDispatchSummary]
 
+HEALTHCHECK_OK_MAX_FAILED_ATTEMPTS = 4
+HEALTHCHECK_WARN_MAX_FAILED_ATTEMPTS = 19
+HEALTHCHECK_STALE_INTERVAL_MULTIPLIER = 2
+
 
 @dataclass(frozen=True)
 class ScopeRunCount:
@@ -35,6 +39,7 @@ class ScopeFreshness:
     """Last successful coverage time for one enabled scope."""
 
     scope_name: str
+    interval_minutes: int
     last_success_at: datetime | None
 
 
@@ -48,7 +53,7 @@ class HealthcheckSummary:
     new_listings: int
     changed_listings: int
     scope_runs: tuple[ScopeRunCount, ...]
-    oldest_scope: ScopeFreshness | None
+    stalest_scope: ScopeFreshness | None
     database_error: str | None = None
 
 
@@ -81,7 +86,7 @@ def send_healthcheck(
             new_listings=0,
             changed_listings=0,
             scope_runs=(),
-            oldest_scope=None,
+            stalest_scope=None,
             database_error=type(error).__name__,
         )
 
@@ -121,9 +126,7 @@ def read_healthcheck_summary(
 ) -> HealthcheckSummary:
     """Read the database counters used by the daily health notification."""
     generated_at = _local_time(current_time)
-    since = generated_at.astimezone(UTC) - timedelta(
-        hours=HOME_RUNNER_HEALTHCHECK_LOOKBACK_HOURS
-    )
+    since = generated_at.astimezone(UTC) - timedelta(hours=HOME_RUNNER_HEALTHCHECK_LOOKBACK_HOURS)
 
     with connection.cursor() as cursor:
         cursor.execute(
@@ -164,14 +167,20 @@ def read_healthcheck_summary(
 
         cursor.execute(
             """
-            select name, last_success_at
+            select name, interval_minutes, last_success_at
             from scrape_scopes
             where enabled = true
-            order by last_success_at nulls first, name
-            limit 1
+            order by name
             """
         )
-        oldest_row = cursor.fetchone()
+        scope_freshness = tuple(
+            ScopeFreshness(
+                scope_name=row["name"],
+                interval_minutes=row["interval_minutes"],
+                last_success_at=row["last_success_at"],
+            )
+            for row in cursor.fetchall()
+        )
 
     return HealthcheckSummary(
         generated_at=generated_at,
@@ -180,14 +189,7 @@ def read_healthcheck_summary(
         new_listings=sum(row.new_listings for row in scope_runs),
         changed_listings=sum(row.changed_listings for row in scope_runs),
         scope_runs=scope_runs,
-        oldest_scope=(
-            ScopeFreshness(
-                scope_name=oldest_row["name"],
-                last_success_at=oldest_row["last_success_at"],
-            )
-            if oldest_row is not None
-            else None
-        ),
+        stalest_scope=_stalest_scope(scope_freshness, generated_at=generated_at),
     )
 
 
@@ -196,12 +198,12 @@ def format_healthcheck_message(summary: HealthcheckSummary) -> str:
     if summary.database_error:
         return "\n".join(
             (
-                "-- Health check -- ERROR",
+                "-- Health check -- CRITICAL",
                 f"Database: unavailable ({summary.database_error})",
             )
         )
 
-    status = "WARN" if summary.failed_runs else "OK"
+    status = _healthcheck_status(summary)
     return "\n".join(
         (
             f"-- Health check -- {status}",
@@ -210,9 +212,24 @@ def format_healthcheck_message(summary: HealthcheckSummary) -> str:
                 f"Total: {summary.successful_runs} scans, "
                 f"{summary.new_listings} new, {summary.changed_listings} changed"
             ),
-            f"Failures: {summary.failed_runs}",
+            f"Failed scan attempts: {summary.failed_runs}",
+            f"Stalest coverage: {_freshness_text(summary)}",
         )
     )
+
+
+def _healthcheck_status(summary: HealthcheckSummary) -> str:
+    if summary.database_error:
+        return "CRITICAL"
+    if summary.successful_runs == 0 or _scope_is_excessively_stale(summary.stalest_scope, summary):
+        return "CRITICAL"
+    if summary.failed_runs == 0:
+        return "FLAWLESS"
+    if summary.failed_runs <= HEALTHCHECK_OK_MAX_FAILED_ATTEMPTS:
+        return "OK"
+    if summary.failed_runs <= HEALTHCHECK_WARN_MAX_FAILED_ATTEMPTS:
+        return "WARN"
+    return "CRITICAL"
 
 
 def _local_time(current_time: datetime | None) -> datetime:
@@ -229,12 +246,15 @@ def _scope_run_lines(scope_runs: tuple[ScopeRunCount, ...]) -> tuple[str, ...]:
 
 
 def _freshness_text(summary: HealthcheckSummary) -> str:
-    if summary.oldest_scope is None:
+    if summary.stalest_scope is None:
         return "no enabled scopes"
-    if summary.oldest_scope.last_success_at is None:
-        return f"never ({summary.oldest_scope.scope_name})"
+    if summary.stalest_scope.last_success_at is None:
+        return (
+            f"never ({summary.stalest_scope.scope_name}, "
+            f"interval {summary.stalest_scope.interval_minutes}m)"
+        )
 
-    age = summary.generated_at - summary.oldest_scope.last_success_at.astimezone(
+    age = summary.generated_at - summary.stalest_scope.last_success_at.astimezone(
         NEW_ZEALAND_TIME_ZONE
     )
     age_seconds = max(0, int(age.total_seconds()))
@@ -244,7 +264,42 @@ def _freshness_text(summary: HealthcheckSummary) -> str:
         age_text = f"{round(age_seconds / 3600)}h"
     else:
         age_text = f"{round(age_seconds / 86400)}d"
-    return f"{age_text} ({summary.oldest_scope.scope_name})"
+    return (
+        f"{age_text} ({summary.stalest_scope.scope_name}, "
+        f"interval {summary.stalest_scope.interval_minutes}m)"
+    )
+
+
+def _stalest_scope(
+    scopes: tuple[ScopeFreshness, ...],
+    *,
+    generated_at: datetime,
+) -> ScopeFreshness | None:
+    if not scopes:
+        return None
+    return max(
+        scopes,
+        key=lambda scope: _scope_staleness_ratio(scope, generated_at=generated_at),
+    )
+
+
+def _scope_staleness_ratio(scope: ScopeFreshness, *, generated_at: datetime) -> float:
+    if scope.last_success_at is None:
+        return float("inf")
+    age = generated_at - scope.last_success_at.astimezone(NEW_ZEALAND_TIME_ZONE)
+    age_seconds = max(0, age.total_seconds())
+    return age_seconds / (scope.interval_minutes * 60)
+
+
+def _scope_is_excessively_stale(
+    scope: ScopeFreshness | None,
+    summary: HealthcheckSummary,
+) -> bool:
+    if scope is None or scope.last_success_at is None:
+        return True
+    age = summary.generated_at - scope.last_success_at.astimezone(NEW_ZEALAND_TIME_ZONE)
+    stale_after = timedelta(minutes=scope.interval_minutes * HEALTHCHECK_STALE_INTERVAL_MULTIPLIER)
+    return age > stale_after
 
 
 def _provider_message_id_text(result: NotificationDispatchSummary) -> str | None:
@@ -259,6 +314,4 @@ def _provider_message_id_text(result: NotificationDispatchSummary) -> str | None
 def _dispatch_error_text(result: NotificationDispatchSummary) -> str | None:
     if not result.failures:
         return None
-    return "; ".join(
-        f"{failure.channel}: {failure.error_message}" for failure in result.failures
-    )
+    return "; ".join(f"{failure.channel}: {failure.error_message}" for failure in result.failures)

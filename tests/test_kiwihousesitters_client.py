@@ -20,7 +20,12 @@ class FakeResponse:
 
 
 class FakeSession:
-    def __init__(self, responses: FakeResponse | list[FakeResponse]) -> None:
+    def __init__(
+        self,
+        responses: FakeResponse
+        | requests.RequestException
+        | list[FakeResponse | requests.RequestException],
+    ) -> None:
         self.responses = responses if isinstance(responses, list) else [responses]
         self.requested_urls: list[str] = []
         self.requested_headers: list[dict[str, str] | None] = []
@@ -36,11 +41,17 @@ class FakeSession:
     ) -> FakeResponse:
         self.requested_urls.append(url)
         self.requested_headers.append(headers)
-        return self.responses.pop(0)
+        response = self.responses.pop(0)
+        if isinstance(response, requests.RequestException):
+            raise response
+        return response
 
     def post(self, url: str, *, data: object, timeout: int) -> FakeResponse:
         self.posted_requests.append((url, data))
-        return self.responses.pop(0)
+        response = self.responses.pop(0)
+        if isinstance(response, requests.RequestException):
+            raise response
+        return response
 
 
 def test_fetch_html_rejects_non_ok_status() -> None:
@@ -66,12 +77,70 @@ def test_client_rejects_negative_request_interval() -> None:
         KiwiHouseSittersClient(request_interval_seconds=-1)
 
 
+def test_client_retries_transient_statuses_with_exponential_backoff() -> None:
+    sleep_delays: list[float] = []
+    fake_session = FakeSession(
+        [
+            FakeResponse(status_code=503),
+            FakeResponse(status_code=503),
+            FakeResponse(status_code=200, text="recovered"),
+        ]
+    )
+    client = KiwiHouseSittersClient(
+        request_interval_seconds=0,
+        transient_retry_attempts=2,
+        transient_retry_backoff_seconds=5,
+        sleep_for=sleep_delays.append,
+        session_factory=lambda: fake_session,
+    )
+
+    assert client.fetch_html("https://example.test/search") == "recovered"
+    assert sleep_delays == [5, 10]
+    assert fake_session.requested_urls == ["https://example.test/search"] * 3
+
+
+def test_client_retries_transient_connection_errors() -> None:
+    fake_session = FakeSession(
+        [requests.Timeout("slow"), FakeResponse(status_code=200, text="recovered")]
+    )
+    client = KiwiHouseSittersClient(
+        request_interval_seconds=0,
+        transient_retry_attempts=1,
+        transient_retry_backoff_seconds=0,
+        session_factory=lambda: fake_session,
+    )
+
+    assert client.fetch_html("https://example.test/search") == "recovered"
+
+
+def test_client_does_not_immediately_retry_rate_limit_response() -> None:
+    fake_session = FakeSession(
+        [
+            FakeResponse(
+                status_code=429,
+                headers={"retry-after": "120", "server": "cloudflare"},
+            ),
+            FakeResponse(status_code=200, text="should not be requested"),
+        ]
+    )
+    client = KiwiHouseSittersClient(
+        request_interval_seconds=0,
+        transient_retry_attempts=2,
+        session_factory=lambda: fake_session,
+    )
+
+    with pytest.raises(requests.HTTPError) as error:
+        client.fetch_html("https://example.test/search")
+
+    assert "Unexpected status code: 429" in str(error.value)
+    assert "retry_after=120" in str(error.value)
+    assert fake_session.requested_urls == ["https://example.test/search"]
+
+
 def test_filtered_first_page_spaces_get_and_post_requests() -> None:
     times = iter((100.0, 100.2, 101.0))
     sleep_delays: list[float] = []
-    fake_session = FakeSession(
-        [FakeResponse(status_code=200), FakeResponse(status_code=200)]
-    )
+    fake_session = FakeSession([FakeResponse(status_code=200), FakeResponse(status_code=200)])
     client = KiwiHouseSittersClient(
         request_interval_seconds=1.0,
         clock=lambda: next(times),

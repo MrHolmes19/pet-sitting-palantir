@@ -47,6 +47,12 @@ time completing Lambda deployment instructions for the current plan.
   executed scope over the previous 24 hours, new and changed listings, failed
   runs over the same window. A runner started after that window does not send a
   catch-up health check for that day.
+- The health-check headline classifies failed scan attempts as `FLAWLESS` for
+  zero, `OK` for 1-4, `WARN` for 5-19, and `CRITICAL` for 20 or more. Safety
+  signals override those bands: a database error, no successful scans in the
+  lookback window, no enabled scope coverage, a scope never successfully
+  covered, or the stalest scope exceeding twice its configured interval is
+  `CRITICAL`. The message includes the stalest scope's coverage age and interval.
 - The scheduled/public `run_due_scrape_scopes` application entry point enforces
   quiet hours from `00:00` inclusive to `06:00` exclusive in
   `Pacific/Auckland`.
@@ -89,7 +95,11 @@ python -m pet_sitting_palantir --run-continuously --max-pages all
   example, an island-level 12-hour scope does not become due just because the
   runner restarted after a shorter outage.
 - Network or database connectivity failures are logged at `ERROR` level and the
-  process keeps running; the next 5-minute tick attempts recovery.
+  process keeps running. Failed scopes remain overdue, but their latest direct
+  attempt starts a retry cooldown: short-cadence scopes retain their configured
+  cadence and scopes with intervals over 60 minutes retry at most hourly. A
+  cooling-down broad scope does not suppress ready narrower scopes, so failed
+  nationwide work cannot monopolize Auckland alert ticks.
 - Every tick logs start and completion at `INFO` level, including ticks that
   perform no scrape because nothing is due or quiet hours apply. If a start log
   appears without completion, investigate a blocked database or scrape request.
@@ -120,7 +130,7 @@ For the initial private-chat Telegram destination, create a bot through
 that chat's id from the Bot API `getUpdates` response, and add the token and
 chat id only to `.env.production`.
 
-Code-owned operational values such as request pacing (`0.5` seconds), the
+Code-owned operational values such as request pacing (`1.5` seconds), the
 five-minute tick, quiet hours, and PostgreSQL connection failure limits live in
 `src/pet_sitting_palantir/settings.py`.
 
