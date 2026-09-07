@@ -47,6 +47,12 @@ time completing Lambda deployment instructions for the current plan.
   executed scope over the previous 24 hours, new and changed listings, failed
   runs over the same window. A runner started after that window does not send a
   catch-up health check for that day.
+- The health-check headline classifies failed scan attempts as `FLAWLESS` for
+  zero, `OK` for 1-4, `WARN` for 5-19, and `CRITICAL` for 20 or more. Safety
+  signals override those bands: a database error, no successful scans in the
+  lookback window, no enabled scope coverage, a scope never successfully
+  covered, or the stalest scope exceeding twice its configured interval is
+  `CRITICAL`. The message includes the stalest scope's coverage age and interval.
 - The scheduled/public `run_due_scrape_scopes` application entry point enforces
   quiet hours from `00:00` inclusive to `06:00` exclusive in
   `Pacific/Auckland`.
