@@ -18,7 +18,7 @@ def test_configured_alert_filters_merge_local_defaults_with_named_overrides() ->
     configured = configuration["filters"][0]
     parsed = filters[0]
     assert parsed.name == configured["name"]
-    assert parsed.enabled is defaults["enabled"]
+    assert parsed.enabled is configured.get("enabled", defaults["enabled"])
     assert parsed.site_filter == configured["site_filter"]
     assert parsed.local_filter == {
         **defaults["local_filter"],
