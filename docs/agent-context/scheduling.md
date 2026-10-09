@@ -58,15 +58,18 @@ time completing Lambda deployment instructions for the current plan.
   `Pacific/Auckland`.
 - During quiet hours, that entry point returns `status = "quiet_hours"` and does
   not connect to PostgreSQL or scrape KiwiHouseSitters.
-- The home runner processes pending notification deliveries after the scrape
-  phase of every tick, independently of scrape quiet hours. Delivery respects
-  each event's filter-derived `deliver_after` timestamp.
+- The home runner processes pending notification deliveries after the Auckland
+  priority phase and before optional broad background work, independently of
+  scrape quiet hours. Delivery respects each event's filter-derived
+  `deliver_after` timestamp.
 - An external schedule may also omit overnight executions, but it must not be
   the only quiet-hours protection.
 - The home runner holds a single-instance lock and refuses a second concurrent
   runner.
-- Monitor broad-scope runtime; if it grows beyond a five-minute tick, budget
-  broad catch-up work so it cannot delay short-cadence Auckland scopes.
+- Keep `all_nz` and `north_island` as enabled logical scopes. Try the complete
+  parent strategy in deadline-bounded background time, then persistently fall
+  back to one region per eligible tick after a WAF challenge or deadline. Only
+  one broad campaign may be active at a time.
 - Keep code-owned operational values centralized in
   `src/pet_sitting_palantir/settings.py`; keep scope cadences in PostgreSQL.
 
@@ -80,11 +83,11 @@ python -m pet_sitting_palantir --run-continuously --max-pages all
 
 - PostgreSQL is the scheduling source of truth. Each tick re-reads enabled
   scopes and decides what is due from `last_success_at`.
-- A successful scrape advances `last_success_at` for the directly scraped scope
-  and for enabled narrower scopes covered by the same complete result.
-  `last_attempt_at` changes only for the scope that issued requests. This
-  prevents a successful `all_nz` or regional baseline from immediately causing
-  redundant narrower baseline scrapes.
+- A successful Auckland priority scrape advances `last_success_at` for the
+  directly scraped scope and enabled narrower priority scopes covered by that
+  complete result. A broad campaign advances only its original parent scope;
+  it never advances Auckland freshness or the other broad scope.
+  `last_attempt_at` changes only for the scope that issued requests.
 - Restarting the home runner does not reset intervals or postpone work that was
   due while the machine was offline.
 - If overlapping scopes became due during downtime, the existing broadest-scope
@@ -92,14 +95,37 @@ python -m pet_sitting_palantir --run-continuously --max-pages all
   Central and Auckland Region are both overdue, Auckland Region covers the
   Central catch-up work.
 - A scope that is not due remains anchored to its last successful run. For
-  example, an island-level 12-hour scope does not become due just because the
+  example, the 12-hour North Island scope does not become due just because the
   runner restarted after a shorter outage.
 - Network or database connectivity failures are logged at `ERROR` level and the
   process keeps running. Failed scopes remain overdue, but their latest direct
   attempt starts a retry cooldown: short-cadence scopes retain their configured
-  cadence and scopes with intervals over 60 minutes retry at most hourly. A
-  cooling-down broad scope does not suppress ready narrower scopes, so failed
-  nationwide work cannot monopolize Auckland alert ticks.
+  cadence and scopes with intervals over 60 minutes retry at most hourly.
+- An AWS WAF HTTP 202 JavaScript challenge opens a persisted circuit breaker.
+  A broad-scope challenge does not suppress or reschedule the Auckland priority
+  phase. Broad work waits 24 hours; further WAF challenges in that campaign
+  double the pause up to seven days. The challenged parent attempt converts to
+  regional fallback, or a challenged fallback region remains pending.
+  Successful regions remain staged. Ticks deferred by broad protection log
+  `status=waf_cooldown`.
+- If an Auckland scope itself receives the challenge, that exact scope waits 15
+  minutes before retrying. The cooldown does not apply to other Auckland scopes
+  and ends early if a successful broader Auckland scope provides fresh coverage.
+  A fully deferred priority tick logs `status=priority_waf_cooldown`.
+- Each home-runner tick executes Auckland first, then delivery, then optional
+  broad work. Background work is skipped after an Auckland failure or when less
+  than two minutes remain in that tick's original window. It cannot borrow time
+  from a later window if Auckland itself runs long. Otherwise it receives a hard
+  deadline that reserves the final minute for the next Auckland tick. Deadline
+  exhaustion safely converts a parent attempt to regional fallback or leaves a
+  regional attempt pending for retry.
+- Broad progress and failures have explicit server logs: `broad_leaf_ok`,
+  `broad_leaf_fail`, `waf_challenge`, and `broad_campaign_complete`. WAF logs
+  include scope, campaign, region, progress, challenge count, and resume time.
+- Every failed broad campaign step also creates a sanitized failed
+  `scrape_runs` attempt. The daily health check therefore includes WAF,
+  deadline, and other campaign failures in `Failed scan attempts` instead of
+  reporting a false `FLAWLESS` day.
 - Every tick logs start and completion at `INFO` level, including ticks that
   perform no scrape because nothing is due or quiet hours apply. If a start log
   appears without completion, investigate a blocked database or scrape request.
@@ -109,8 +135,8 @@ python -m pet_sitting_palantir --run-continuously --max-pages all
 - Scope scrape failures do not update `last_success_at`, so they remain eligible
   for later retry.
 - A matching event due immediately is sent after its scrape transaction commits
-  and before the runner sleeps for the next tick. Telegram failure does not
-  fail the scrape; it records a failed delivery attempt and retries later.
+  and before any broad background step. Telegram failure does not fail the
+  scrape; it records a failed delivery attempt and retries later.
 
 ## Runtime Configuration
 
@@ -130,8 +156,9 @@ For the initial private-chat Telegram destination, create a bot through
 that chat's id from the Bot API `getUpdates` response, and add the token and
 chat id only to `.env.production`.
 
-Code-owned operational values such as request pacing (`1.5` seconds), the
-five-minute tick, quiet hours, and PostgreSQL connection failure limits live in
+Code-owned operational values such as request pacing (a `2.0`-second minimum
+plus up to `1.5` seconds of random jitter), the five-minute tick, quiet hours,
+and PostgreSQL connection failure limits live in
 `src/pet_sitting_palantir/settings.py`.
 
 ## Operational Priorities

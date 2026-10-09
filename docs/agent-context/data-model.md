@@ -39,6 +39,36 @@ scope, whether produced directly or by a successful broader containing scope.
 Use actual completion timestamps rather than transaction-start timestamps for
 scheduling freshness.
 
+Production keeps the existing `all_nz` and `north_island` rows enabled. Their
+logical identity and historical `scrape_runs` remain unchanged; a complete
+campaign finalizes as one ordinary parent run and advances only that parent's
+freshness. It does not advance the other broad scope or any Auckland scope.
+
+## `broad_scrape_campaigns` And `broad_scrape_campaign_leaves`
+
+`broad_scrape_campaigns` stores restart-safe progress, the next allowed attempt,
+the WAF challenge count, and active/completed state for a logical broad scope.
+Database constraints allow only one active campaign globally and only one per
+scope.
+
+`broad_scrape_campaign_leaves` stores the initial `__full__` parent attempt or
+stable ordered region fallback filters, plus attempt state and normalized
+listing JSON for successful leaves. A `split` full leaf records why it converted
+to fallback; a failed region remains pending. Leaf staging never changes listing
+or parent-scope state. Successful payload JSON is cleared in the same transaction
+that finalizes the parent; progress, counters, timestamps, and sanitized errors
+remain for audit and WAF history.
+
+At finalization, listing observations retain each leaf's completion time.
+Out-of-order staged observations cannot overwrite a newer listing observation.
+Regional fallback missing evidence is applied per non-Auckland region only to
+listings not observed after that region completed. Missing authority is
+non-overlapping: All NZ owns South Island, North Island owns non-Auckland North
+Island, and golden Auckland scopes own Auckland. A direct full leaf performs no
+missing inference. The parent result and campaign completion commit in one
+transaction. Failed campaign steps create sanitized failed `scrape_runs` rows so
+daily health reporting includes them.
+
 ## `scrape_runs`
 
 One row per execution of one scope.

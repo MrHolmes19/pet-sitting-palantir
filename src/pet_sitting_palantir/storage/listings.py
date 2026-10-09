@@ -1,6 +1,7 @@
 """Storage functions for listings."""
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
+from datetime import datetime
 from typing import Any, Literal
 
 from psycopg import Connection
@@ -51,6 +52,7 @@ def upsert_listing(
     listing: ListingRecord,
     run_id: int,
     first_seen_context: FirstSeenContext = "observed",
+    observed_at: datetime | None = None,
 ) -> ListingUpsertResult:
     """Insert or update a listing by external_id."""
     _validate_listing_for_persistence(listing)
@@ -58,7 +60,7 @@ def upsert_listing(
     with connection.cursor() as cursor:
         cursor.execute(
             """
-            select id, content_hash, status, appearance_sequence
+            select id, content_hash, status, appearance_sequence, last_seen_at
             from listings
             where external_id = %s
             for update
@@ -75,17 +77,21 @@ def upsert_listing(
                   {", ".join(LISTING_COLUMNS)},
                   first_seen_run_id,
                   last_seen_run_id,
-                  first_seen_context
+                  first_seen_context,
+                  first_seen_at,
+                  last_seen_at
                 )
                 values (
                   {", ".join(["%s"] * len(LISTING_COLUMNS))},
                   %s,
                   %s,
-                  %s
+                  %s,
+                  coalesce(%s, now()),
+                  coalesce(%s, now())
                 )
                 returning id, appearance_sequence
                 """,
-                (*values, run_id, run_id, first_seen_context),
+                (*values, run_id, run_id, first_seen_context, observed_at, observed_at),
             )
             inserted = cursor.fetchone()
             return ListingUpsertResult(
@@ -98,6 +104,18 @@ def upsert_listing(
                 appearance_sequence=inserted["appearance_sequence"],
             )
 
+        if observed_at is not None and existing["last_seen_at"] > observed_at:
+            return ListingUpsertResult(
+                listing_id=existing["id"],
+                external_id=listing.external_id,
+                created=False,
+                changed=False,
+                previous_status=existing["status"],
+                previous_content_hash=existing["content_hash"],
+                appearance_sequence=existing["appearance_sequence"],
+                observation_applied=False,
+            )
+
         changed = existing["content_hash"] != listing.content_hash
         assignments = ",\n              ".join(f"{column} = %s" for column in LISTING_COLUMNS[1:])
         cursor.execute(
@@ -105,7 +123,7 @@ def upsert_listing(
             update listings
             set
               {assignments},
-              last_seen_at = now(),
+              last_seen_at = coalesce(%s, now()),
               last_seen_run_id = %s,
               status = 'active',
               missing_count = 0,
@@ -118,7 +136,7 @@ def upsert_listing(
             where id = %s
             returning appearance_sequence
             """,
-            (*values[1:], run_id, existing["id"]),
+            (*values[1:], observed_at, run_id, existing["id"]),
         )
         updated = cursor.fetchone()
         return ListingUpsertResult(
@@ -138,6 +156,7 @@ def upsert_listings(
     listings: Iterable[ListingRecord],
     run_id: int,
     first_seen_context: FirstSeenContext = "observed",
+    observed_at_by_external_id: Mapping[str, datetime] | None = None,
 ) -> ListingUpsertSummary:
     """Upsert a batch of listings and return counters for scrape_runs."""
     seen = 0
@@ -152,6 +171,11 @@ def upsert_listings(
             listing=listing,
             run_id=run_id,
             first_seen_context=first_seen_context,
+            observed_at=(
+                observed_at_by_external_id.get(listing.external_id)
+                if observed_at_by_external_id is not None
+                else None
+            ),
         )
         results.append(result)
         created += int(result.created)

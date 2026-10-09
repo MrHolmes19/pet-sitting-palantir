@@ -1,0 +1,184 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pet-sitting-palantir.local/contracts/broad_scrape_campaign_listing.schema.json",
+  "title": "Broad scrape campaign listing payload",
+  "type": "object",
+  "description": "Temporary normalized listing staged until every campaign leaf is complete.",
+  "additionalProperties": false,
+  "properties": {
+    "external_id": {
+      "description": "KiwiHouseSitters listing identifier.",
+      "$ref": "listings.schema.json#/properties/external_id"
+    },
+    "content_hash": {
+      "description": "Hash of alert-relevant listing content.",
+      "$ref": "listings.schema.json#/properties/content_hash"
+    },
+    "island": {
+      "description": "Normalized New Zealand island.",
+      "$ref": "listings.schema.json#/properties/island"
+    },
+    "region": {
+      "description": "Normalized region label.",
+      "$ref": "listings.schema.json#/properties/region"
+    },
+    "subregion": {
+      "description": "Normalized subregion label.",
+      "$ref": "listings.schema.json#/properties/subregion"
+    },
+    "city": {
+      "description": "Normalized city label.",
+      "$ref": "listings.schema.json#/properties/city"
+    },
+    "duration_days": {
+      "description": "Calculated sit duration.",
+      "$ref": "listings.schema.json#/properties/duration_days"
+    },
+    "start_date": {
+      "description": "Listing start date.",
+      "$ref": "listings.schema.json#/properties/start_date"
+    },
+    "end_date": {
+      "description": "Listing end date.",
+      "$ref": "listings.schema.json#/properties/end_date"
+    },
+    "house_type": {
+      "description": "Advertised home type.",
+      "$ref": "listings.schema.json#/properties/house_type"
+    },
+    "total_animals": {
+      "description": "Total normalized pet count.",
+      "$ref": "listings.schema.json#/properties/total_animals"
+    },
+    "dogs_count": {
+      "description": "Dog count.",
+      "$ref": "listings.schema.json#/properties/dogs_count"
+    },
+    "cats_count": {
+      "description": "Cat count.",
+      "$ref": "listings.schema.json#/properties/cats_count"
+    },
+    "fish_count": {
+      "description": "Fish count.",
+      "$ref": "listings.schema.json#/properties/fish_count"
+    },
+    "birds_count": {
+      "description": "Bird count.",
+      "$ref": "listings.schema.json#/properties/birds_count"
+    },
+    "rabbits_guinea_pigs_count": {
+      "description": "Rabbit and guinea pig count.",
+      "$ref": "listings.schema.json#/properties/rabbits_guinea_pigs_count"
+    },
+    "chickens_ducks_geese_count": {
+      "description": "Poultry count.",
+      "$ref": "listings.schema.json#/properties/chickens_ducks_geese_count"
+    },
+    "farm_animals_count": {
+      "description": "Farm-animal count.",
+      "$ref": "listings.schema.json#/properties/farm_animals_count"
+    },
+    "horses_count": {
+      "description": "Horse count.",
+      "$ref": "listings.schema.json#/properties/horses_count"
+    },
+    "reptiles_count": {
+      "description": "Reptile count.",
+      "$ref": "listings.schema.json#/properties/reptiles_count"
+    },
+    "other_pets_count": {
+      "description": "Other-pet count.",
+      "$ref": "listings.schema.json#/properties/other_pets_count"
+    },
+    "no_pets": {
+      "description": "Whether the listing explicitly has no pets.",
+      "$ref": "listings.schema.json#/properties/no_pets"
+    },
+    "starts_soon": {
+      "description": "Whether the site marks the sit as starting soon.",
+      "$ref": "listings.schema.json#/properties/starts_soon"
+    },
+    "reply_rating_score": {
+      "description": "Advertiser reply rating.",
+      "$ref": "listings.schema.json#/properties/reply_rating_score"
+    },
+    "listing_tag": {
+      "description": "Site-provided listing tag.",
+      "$ref": "listings.schema.json#/properties/listing_tag"
+    },
+    "title": {
+      "description": "Listing title.",
+      "$ref": "listings.schema.json#/properties/title"
+    },
+    "intro": {
+      "description": "Listing introduction.",
+      "$ref": "listings.schema.json#/properties/intro"
+    },
+    "url": {
+      "description": "Canonical listing URL.",
+      "$ref": "listings.schema.json#/properties/url"
+    }
+  },
+  "required": [
+    "external_id",
+    "content_hash",
+    "island",
+    "region",
+    "subregion",
+    "city",
+    "duration_days",
+    "start_date",
+    "end_date",
+    "house_type",
+    "total_animals",
+    "dogs_count",
+    "cats_count",
+    "fish_count",
+    "birds_count",
+    "rabbits_guinea_pigs_count",
+    "chickens_ducks_geese_count",
+    "farm_animals_count",
+    "horses_count",
+    "reptiles_count",
+    "other_pets_count",
+    "no_pets",
+    "starts_soon",
+    "reply_rating_score",
+    "listing_tag",
+    "title",
+    "intro",
+    "url"
+  ],
+  "examples": [
+    {
+      "external_id": "12345",
+      "content_hash": "abc123",
+      "island": "North Island",
+      "region": "Auckland",
+      "subregion": "Auckland - Central",
+      "city": "Auckland",
+      "duration_days": 7,
+      "start_date": "2026-12-01",
+      "end_date": "2026-12-08",
+      "house_type": "House",
+      "total_animals": 1,
+      "dogs_count": 1,
+      "cats_count": 0,
+      "fish_count": 0,
+      "birds_count": 0,
+      "rabbits_guinea_pigs_count": 0,
+      "chickens_ducks_geese_count": 0,
+      "farm_animals_count": 0,
+      "horses_count": 0,
+      "reptiles_count": 0,
+      "other_pets_count": 0,
+      "no_pets": false,
+      "starts_soon": false,
+      "reply_rating_score": 8,
+      "listing_tag": "New",
+      "title": "Central Auckland sit",
+      "intro": "Look after one dog",
+      "url": "https://www.kiwihousesitters.co.nz/house-sitting-pet-sitting-job/12345/"
+    }
+  ]
+}

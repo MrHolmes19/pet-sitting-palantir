@@ -11,6 +11,10 @@ ALERT_FILTER_CONFIG = Path(__file__).parents[1] / "config" / "alert_filters.json
 ALERT_FILTER_DEFAULTS = Path(__file__).parents[1] / "config" / "alert_filter_defaults.json"
 
 TABLE_CONTRACTS = {
+    "broad_scrape_campaigns": CONTRACTS_DIR / "broad_scrape_campaigns.schema.json",
+    "broad_scrape_campaign_leaves": (
+        CONTRACTS_DIR / "broad_scrape_campaign_leaves.schema.json"
+    ),
     "scrape_scopes": CONTRACTS_DIR / "scrape_scopes.schema.json",
     "scrape_runs": CONTRACTS_DIR / "scrape_runs.schema.json",
     "listings": CONTRACTS_DIR / "listings.schema.json",

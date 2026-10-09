@@ -8,6 +8,7 @@ from pet_sitting_palantir.domain.models import Listing
 from pet_sitting_palantir.kiwihousesitters.client import (
     KiwiHouseSittersClient,
     KiwiHouseSittersHTTPError,
+    KiwiHouseSittersWAFChallengeError,
     PageFetch,
 )
 from pet_sitting_palantir.kiwihousesitters.constants import (
@@ -22,6 +23,7 @@ from pet_sitting_palantir.kiwihousesitters.parser import (
     search_page_has_cap_notice,
 )
 from pet_sitting_palantir.kiwihousesitters.search_filters import build_search_request
+from pet_sitting_palantir.settings import KIWIHOUSESITTERS_REQUEST_INTERVAL_JITTER_SECONDS
 
 
 @dataclass(frozen=True)
@@ -48,7 +50,9 @@ def scrape_scope(
     client: KiwiHouseSittersClient | None = None,
 ) -> ScrapeResult:
     """Scrape a KiwiHouseSitters search scope."""
-    scraper_client = client or KiwiHouseSittersClient()
+    scraper_client = client or KiwiHouseSittersClient(
+        request_interval_jitter_seconds=KIWIHOUSESITTERS_REQUEST_INTERVAL_JITTER_SECONDS
+    )
     root_filter = dict(site_filter or {})
     search_request = build_search_request(root_filter)
     listings_by_external_id: dict[str, Listing] = {}
@@ -225,6 +229,9 @@ def _http_error_with_search_context(
     site_filter: Mapping[str, Any],
     phase: str,
 ) -> KiwiHouseSittersHTTPError:
-    return KiwiHouseSittersHTTPError(
-        f"{error}; phase={phase}; site_filter={dict(site_filter)}"
+    error_type = (
+        KiwiHouseSittersWAFChallengeError
+        if isinstance(error, KiwiHouseSittersWAFChallengeError)
+        else KiwiHouseSittersHTTPError
     )
+    return error_type(f"{error}; phase={phase}; site_filter={dict(site_filter)}")

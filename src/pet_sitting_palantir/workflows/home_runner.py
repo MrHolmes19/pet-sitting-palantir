@@ -9,11 +9,15 @@ from os import getpid
 from pathlib import Path
 from time import sleep, time
 
+from pet_sitting_palantir.kiwihousesitters.constants import WAF_CHALLENGE_ERROR_MARKER
 from pet_sitting_palantir.settings import (
+    HOME_RUNNER_BACKGROUND_MIN_BUDGET_SECONDS,
+    HOME_RUNNER_BACKGROUND_SAFETY_MARGIN_SECONDS,
     HOME_RUNNER_HEALTHCHECK_TIME,
     HOME_RUNNER_HEALTHCHECK_WINDOW_MINUTES,
     HOME_RUNNER_LOCK_FILE,
     HOME_RUNNER_TICK_INTERVAL_SECONDS,
+    KIWIHOUSESITTERS_REQUEST_INTERVAL_JITTER_SECONDS,
     KIWIHOUSESITTERS_REQUEST_INTERVAL_SECONDS,
     NEW_ZEALAND_TIME_ZONE,
 )
@@ -27,12 +31,14 @@ from pet_sitting_palantir.workflows.healthcheck import (
 )
 from pet_sitting_palantir.workflows.run_due_scopes import (
     DueScopeRunResult,
-    run_due_scrape_scopes,
+    run_due_broad_scrape_scopes,
+    run_due_priority_scrape_scopes,
 )
 
 logger = getLogger(__name__)
 
 DueScopeRunner = Callable[..., DueScopeRunResult]
+BroadScopeRunner = Callable[..., DueScopeRunResult]
 AlertDeliveryRunner = Callable[[], AlertDeliverySummary]
 HealthcheckRunner = Callable[..., HealthcheckDeliverySummary]
 
@@ -49,18 +55,23 @@ def run_home_runner(
     """Run the production due-scope supervisor until interrupted."""
     with _single_instance_lock(lock_file):
         logger.info(
-            "runner_start tick=%ss request_delay=%ss",
+            "runner_start tick=%ss request_delay=%ss request_jitter=0-%ss",
             HOME_RUNNER_TICK_INTERVAL_SECONDS,
             KIWIHOUSESITTERS_REQUEST_INTERVAL_SECONDS,
+            KIWIHOUSESITTERS_REQUEST_INTERVAL_JITTER_SECONDS,
         )
-        _run_continuously(max_pages=max_pages)
+        _run_continuously(
+            max_pages=max_pages,
+            broad_scope_runner=run_due_broad_scrape_scopes,
+        )
 
 
 def _run_continuously(
     *,
     max_pages: int | None = None,
     tick_interval_seconds: int = HOME_RUNNER_TICK_INTERVAL_SECONDS,
-    due_scope_runner: DueScopeRunner = run_due_scrape_scopes,
+    due_scope_runner: DueScopeRunner = run_due_priority_scrape_scopes,
+    broad_scope_runner: BroadScopeRunner | None = None,
     alert_delivery_runner: AlertDeliveryRunner = deliver_due_alerts,
     healthcheck_runner: HealthcheckRunner = send_healthcheck,
     sleep_for: Callable[[float], None] = sleep,
@@ -105,8 +116,11 @@ def _run_continuously(
             _run_tick(
                 max_pages=max_pages,
                 due_scope_runner=due_scope_runner,
+                broad_scope_runner=broad_scope_runner,
                 alert_delivery_runner=alert_delivery_runner,
                 runtime_logger=runtime_logger,
+                tick_interval_seconds=tick_interval_seconds,
+                clock=clock,
             )
             sleep_for(_seconds_until_next_tick(clock(), tick_interval_seconds))
     except KeyboardInterrupt:
@@ -119,8 +133,17 @@ def _run_tick(
     due_scope_runner: DueScopeRunner,
     runtime_logger: Logger,
     alert_delivery_runner: AlertDeliveryRunner = deliver_due_alerts,
+    broad_scope_runner: BroadScopeRunner | None = None,
+    tick_interval_seconds: int = HOME_RUNNER_TICK_INTERVAL_SECONDS,
+    clock: Callable[[], float] = time,
 ) -> None:
     runtime_logger.info("tick_start")
+    tick_started_at = clock()
+    tick_window_ends_at = tick_started_at + _seconds_until_next_tick(
+        tick_started_at,
+        tick_interval_seconds,
+    )
+    result: DueScopeRunResult | None = None
     try:
         result = due_scope_runner(max_pages=max_pages)
     except Exception as error:
@@ -130,44 +153,7 @@ def _run_tick(
             error,
         )
     else:
-        if result.scopes_failed:
-            runtime_logger.error(
-                "tick_failed due=%s failed=%s",
-                result.scopes_due,
-                result.scopes_failed,
-            )
-            for failure in result.failures:
-                runtime_logger.error(
-                    "scope_fail name=%s error=%s",
-                    failure.scope_name,
-                    failure.error_message,
-                )
-        elif result.scopes_due:
-            for stored_result in result.results:
-                runtime_logger.info(
-                    "scope_ok name=%s pages=%s "
-                    "listings=%s new=%s changed=%s missing=%s alerts=%s",
-                    stored_result.scope_name,
-                    stored_result.pages_fetched,
-                    stored_result.listings_seen,
-                    stored_result.new_listings,
-                    stored_result.changed_listings,
-                    stored_result.missing_marked,
-                    len(stored_result.alert_events),
-                )
-                for event in stored_result.alert_events:
-                    runtime_logger.info(
-                        "alert_queued filter=%s type=%s listing=%s channels=%s "
-                        "deliver_after=%s url=%s",
-                        event.filter_name,
-                        event.event_type,
-                        event.listing_external_id,
-                        ",".join(event.target_channels),
-                        event.deliver_after.isoformat(),
-                        event.listing_url,
-                    )
-        else:
-            runtime_logger.info("tick_ok status=%s", result.status)
+        _log_due_scope_result(result, runtime_logger=runtime_logger)
 
     try:
         delivery = alert_delivery_runner()
@@ -194,6 +180,122 @@ def _run_tick(
             failure.channel,
             failure.error_message,
         )
+
+    if broad_scope_runner is None or result is None or result.scopes_failed:
+        return
+
+    remaining_seconds = tick_window_ends_at - clock()
+    time_budget_seconds = remaining_seconds - HOME_RUNNER_BACKGROUND_SAFETY_MARGIN_SECONDS
+    if time_budget_seconds < HOME_RUNNER_BACKGROUND_MIN_BUDGET_SECONDS:
+        runtime_logger.info(
+            "broad_skip reason=priority_window remaining=%ss",
+            round(remaining_seconds, 1),
+        )
+        return
+
+    try:
+        broad_result = broad_scope_runner(
+            max_pages=max_pages,
+            time_budget_seconds=time_budget_seconds,
+        )
+    except Exception as error:
+        runtime_logger.error(
+            "broad_tick_fail type=%s error=%s retry=next_tick",
+            type(error).__name__,
+            error,
+        )
+        return
+    _log_due_scope_result(broad_result, runtime_logger=runtime_logger)
+
+
+def _log_due_scope_result(result: DueScopeRunResult, *, runtime_logger: Logger) -> None:
+    for step in result.campaign_steps:
+        if step.status == "waf_paused":
+            runtime_logger.error(
+                "waf_challenge scope=%s campaign=%s leaf=%s completed=%s/%s "
+                "challenge_count=%s resume_after=%s",
+                step.scope_name,
+                step.campaign_id,
+                step.leaf_key,
+                step.completed_leaves,
+                step.total_leaves,
+                step.waf_challenge_count,
+                step.next_attempt_at.isoformat(),
+            )
+        elif step.status in ("failed_paused", "split_paused"):
+            runtime_logger.error(
+                "broad_leaf_fail scope=%s campaign=%s leaf=%s completed=%s/%s "
+                "resume_after=%s error=%s",
+                step.scope_name,
+                step.campaign_id,
+                step.leaf_key,
+                step.completed_leaves,
+                step.total_leaves,
+                step.next_attempt_at.isoformat(),
+                step.error_message,
+            )
+        elif step.status == "in_progress":
+            runtime_logger.info(
+                "broad_leaf_ok scope=%s campaign=%s leaf=%s completed=%s/%s next_after=%s",
+                step.scope_name,
+                step.campaign_id,
+                step.leaf_key,
+                step.completed_leaves,
+                step.total_leaves,
+                step.next_attempt_at.isoformat(),
+            )
+        elif step.status == "completed":
+            runtime_logger.info(
+                "broad_campaign_complete scope=%s campaign=%s leaves=%s",
+                step.scope_name,
+                step.campaign_id,
+                step.total_leaves,
+            )
+
+    if result.scopes_failed:
+        runtime_logger.error(
+            "tick_failed due=%s failed=%s",
+            result.scopes_due,
+            result.scopes_failed,
+        )
+        for failure in result.failures:
+            if WAF_CHALLENGE_ERROR_MARKER in failure.error_message:
+                runtime_logger.error(
+                    "waf_challenge scope=%s campaign=none action=broad_rest_24h "
+                    "priority_retry=15m_scope_local",
+                    failure.scope_name,
+                )
+            runtime_logger.error(
+                "scope_fail name=%s error=%s",
+                failure.scope_name,
+                failure.error_message,
+            )
+    elif result.scopes_due:
+        for stored_result in result.results:
+            runtime_logger.info(
+                "scope_ok name=%s pages=%s "
+                "listings=%s new=%s changed=%s missing=%s alerts=%s",
+                stored_result.scope_name,
+                stored_result.pages_fetched,
+                stored_result.listings_seen,
+                stored_result.new_listings,
+                stored_result.changed_listings,
+                stored_result.missing_marked,
+                len(stored_result.alert_events),
+            )
+            for event in stored_result.alert_events:
+                runtime_logger.info(
+                    "alert_queued filter=%s type=%s listing=%s channels=%s "
+                    "deliver_after=%s url=%s",
+                    event.filter_name,
+                    event.event_type,
+                    event.listing_external_id,
+                    ",".join(event.target_channels),
+                    event.deliver_after.isoformat(),
+                    event.listing_url,
+                )
+    else:
+        runtime_logger.info("tick_ok status=%s", result.status)
 
 
 def _seconds_until_next_tick(timestamp: float, tick_interval_seconds: int) -> float:

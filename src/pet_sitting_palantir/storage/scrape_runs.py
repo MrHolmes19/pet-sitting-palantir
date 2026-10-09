@@ -1,8 +1,64 @@
 """Storage functions for scrape runs."""
 
+from datetime import datetime
+
 from psycopg import Connection
 
+from pet_sitting_palantir.kiwihousesitters.constants import WAF_CHALLENGE_ERROR_MARKER
 from pet_sitting_palantir.storage.models import ScrapeRunCounts, ScrapeRunStatus
+
+
+def read_latest_waf_challenge_at(connection: Connection) -> datetime | None:
+    """Return the latest persisted WAF challenge, including the legacy error format."""
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            select coalesce(finished_at, started_at) as challenged_at
+            from scrape_runs
+            where status = 'failed'
+              and (
+                error_message like %s
+                or (
+                  error_message like '%%Unexpected status code: 202;%%'
+                  and error_message like '%%awsWafCookieDomainList%%'
+                )
+              )
+            order by coalesce(finished_at, started_at) desc
+            limit 1
+            """,
+            (f"%{WAF_CHALLENGE_ERROR_MARKER}%",),
+        )
+        row = cursor.fetchone()
+        return row["challenged_at"] if row else None
+
+
+def read_latest_scope_waf_challenge_at(
+    connection: Connection,
+    *,
+    scope_name: str,
+) -> datetime | None:
+    """Return the latest persisted WAF challenge for one logical scope."""
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            select coalesce(finished_at, started_at) as challenged_at
+            from scrape_runs
+            where scope_name = %s
+              and status = 'failed'
+              and (
+                error_message like %s
+                or (
+                  error_message like '%%Unexpected status code: 202;%%'
+                  and error_message like '%%awsWafCookieDomainList%%'
+                )
+              )
+            order by coalesce(finished_at, started_at) desc
+            limit 1
+            """,
+            (scope_name, f"%{WAF_CHALLENGE_ERROR_MARKER}%"),
+        )
+        row = cursor.fetchone()
+        return row["challenged_at"] if row else None
 
 
 def create_scrape_run(
@@ -44,6 +100,7 @@ def close_scrape_run(
     status: ScrapeRunStatus,
     counts: ScrapeRunCounts | None = None,
     error_message: str | None = None,
+    advance_covered_scopes: bool = True,
 ) -> None:
     """Close a scrape run with final status and counters."""
     final_counts = counts or ScrapeRunCounts()
@@ -82,7 +139,7 @@ def close_scrape_run(
             raise ValueError(f"Scrape run does not exist: {run_id}")
 
         scope_id = row["scope_id"]
-        if status == "success" and scope_id is not None:
+        if status == "success" and scope_id is not None and advance_covered_scopes:
             cursor.execute(
                 """
                 update scrape_scopes as covered
@@ -94,6 +151,19 @@ def close_scrape_run(
                   and (
                     covered.last_success_at is null
                     or covered.last_success_at < %s
+                  )
+                """,
+                (row["finished_at"], scope_id, row["finished_at"]),
+            )
+        elif status == "success" and scope_id is not None:
+            cursor.execute(
+                """
+                update scrape_scopes
+                set last_success_at = %s
+                where id = %s
+                  and (
+                    last_success_at is null
+                    or last_success_at < %s
                   )
                 """,
                 (row["finished_at"], scope_id, row["finished_at"]),

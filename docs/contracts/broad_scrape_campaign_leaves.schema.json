@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pet-sitting-palantir.local/contracts/broad_scrape_campaign_leaves.schema.json",
+  "title": "broad_scrape_campaign_leaves",
+  "type": "object",
+  "description": "One full-parent attempt or region-sized staged unit within a broad scrape campaign.",
+  "additionalProperties": false,
+  "properties": {
+    "campaign_id": {
+      "type": "integer",
+      "description": "Owning broad campaign id."
+    },
+    "leaf_key": {
+      "type": "string",
+      "description": "Stable region slug, or __full__ for the initial parent attempt."
+    },
+    "ordinal": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Deterministic execution order."
+    },
+    "site_filter": {
+      "description": "Parent or region filter submitted for this leaf.",
+      "$ref": "site_filter.schema.json"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "success",
+        "split"
+      ],
+      "description": "Whether this leaf is pending, complete, or replaced by smaller fallback leaves."
+    },
+    "attempt_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of scraper executions attempted for this leaf."
+    },
+    "pages_fetched": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Pages in the staged complete leaf result."
+    },
+    "listings": {
+      "type": "array",
+      "description": "Temporary normalized listings, discarded after campaign completion.",
+      "items": {
+        "$ref": "broad_scrape_campaign_listing.schema.json"
+      }
+    },
+    "last_attempt_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time",
+      "description": "Most recent leaf attempt time."
+    },
+    "completed_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time",
+      "description": "Time this leaf obtained complete coverage."
+    },
+    "error_message": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Most recent sanitized failure for a pending or split leaf."
+    }
+  },
+  "required": [
+    "campaign_id",
+    "leaf_key",
+    "ordinal",
+    "site_filter",
+    "status",
+    "attempt_count",
+    "pages_fetched",
+    "listings",
+    "last_attempt_at",
+    "completed_at",
+    "error_message"
+  ],
+  "examples": [
+    {
+      "campaign_id": 42,
+      "leaf_key": "auckland",
+      "ordinal": 0,
+      "site_filter": {
+        "state": "north-island",
+        "region": "auckland"
+      },
+      "status": "pending",
+      "attempt_count": 1,
+      "pages_fetched": 0,
+      "listings": [],
+      "last_attempt_at": "2026-10-09T07:00:00Z",
+      "completed_at": null,
+      "error_message": "kiwihousesitters_waf_challenge"
+    }
+  ]
+}

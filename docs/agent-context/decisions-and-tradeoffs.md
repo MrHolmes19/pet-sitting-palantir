@@ -54,10 +54,17 @@ Decision: prefer cheap, boring infrastructure and small implementation phases. A
 
 Fast alerts matter, but the scraper should avoid unnecessary request volume against KiwiHouseSitters.
 
-Decision: use staggered root scopes and dynamic child searches instead of
-scraping every geographic level every 5 minutes. When overlapping scopes are due
-together, run the broadest applicable scope and skip narrower covered scopes in
-that invocation.
+Decision: preserve the fast Auckland scopes and the existing `all_nz` and
+`north_island` identities. Every tick runs Auckland and its alert delivery
+before optional deadline-bounded broad work. Broad failures and WAF protection
+never suppress or reschedule Auckland. A challenge received by an Auckland
+scope pauses only that exact scope for 15 minutes; this protects the shared IP
+without turning a broad failure into an Auckland outage. Try the original
+complete broad strategy first, but convert it into a restart-safe
+region-by-region campaign if it hits a WAF challenge or exhausts its background
+time budget. Remember recent WAF history so a new campaign can start directly
+with the safer fallback. Add request and inter-leaf jitter, and persist both
+campaign progress and circuit state so restarts cannot erase them.
 
 ## Broad Search Completeness
 
@@ -65,12 +72,20 @@ KiwiHouseSitters broad searches can be capped around 200 visible listings. A
 broad capped result is useful as a signal that the search must be split, but it
 is not complete enough for lifecycle inference or historical completeness.
 
-Decision: do not scrape All New Zealand as one unfiltered search. Either schedule
-North Island and South Island separately or keep `all_nz` as a logical root that
-expands into island child searches at runtime. Split over-cap searches by
-location first, then by sit length only if a subregion still exceeds the cap.
-Avoid house type as the primary split because the `House` bucket usually remains
-too large.
+Decision: keep All New Zealand and North Island as independently scheduled
+logical scopes. A direct complete attempt may finish the campaign; otherwise
+stage complete regional leaves, merge and deduplicate only when all leaves
+succeed, then atomically persist under the original parent scope. Partial
+campaigns cannot advance freshness or mark listings missing. Broad completion
+advances only its own parent and never changes Auckland freshness. Regional
+missing inference has exclusive ownership: `all_nz` covers South Island and
+`north_island` covers non-Auckland North Island. This prevents overlapping
+campaigns from advancing the shared missing counter twice. Every staged
+observation keeps its leaf timestamp so delayed broad data cannot overwrite
+fresher golden data.
+Continue splitting capped region searches by subregion and then sit length.
+Avoid house type as the primary split because the `House` bucket usually
+remains too large.
 
 ## Listing Persistence Shape
 

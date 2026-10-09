@@ -67,6 +67,8 @@ def create_alert_events(
     created_events: list[CreatedAlertEvent] = []
 
     for listing, outcome in observations:
+        if not outcome.observation_applied:
+            continue
         for definition in definitions:
             if not listing_matches_filter(listing, definition):
                 continue

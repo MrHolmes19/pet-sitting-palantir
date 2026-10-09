@@ -33,6 +33,8 @@ PAGINATION_REQUEST_HEADERS = MappingProxyType(
 )
 
 HTTP_OK_STATUS = 200
+WAF_CHALLENGE_STATUS = 202
+WAF_CHALLENGE_ERROR_MARKER = "kiwihousesitters_waf_challenge"
 
 LISTING_CARD_SELECTOR = "div.search-listing"
 LISTING_LINK_SELECTOR = 'a[href*="/house-sitting-pet-sitting-job/"]'

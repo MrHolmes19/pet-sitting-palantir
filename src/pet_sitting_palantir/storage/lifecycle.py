@@ -1,6 +1,7 @@
 """Listing lifecycle updates."""
 
 from collections.abc import Mapping
+from datetime import datetime
 from typing import Any
 
 from psycopg import Connection
@@ -14,10 +15,13 @@ def mark_missing_listings_for_scope(
     *,
     scope: ScrapeScope,
     seen_external_ids: set[str],
+    observed_no_later_than: datetime | None = None,
 ) -> int:
     """Mark covered listings missing when absent from a successful scope scrape."""
     where_sql, where_params = _scope_coverage_clause(scope.site_filter)
     seen_ids = list(seen_external_ids)
+    observation_guard = "and last_seen_at <= %s" if observed_no_later_than is not None else ""
+    observation_params = [observed_no_later_than] if observed_no_later_than is not None else []
 
     with connection.cursor() as cursor:
         cursor.execute(
@@ -37,12 +41,14 @@ def mark_missing_listings_for_scope(
             where status in ('active', 'missing_once')
               and external_id <> all(%s)
               and {where_sql}
+              {observation_guard}
             """,
             (
                 scope.missing_threshold_runs,
                 scope.missing_threshold_runs,
                 seen_ids,
                 *where_params,
+                *observation_params,
             ),
         )
         return cursor.rowcount

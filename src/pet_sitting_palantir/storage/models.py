@@ -6,6 +6,7 @@ from datetime import date, datetime
 from typing import Any, Literal
 
 ScrapeRunStatus = Literal["running", "success", "partial_failure", "failed", "suspicious"]
+BroadScrapeCampaignStatus = Literal["running", "paused", "completed", "abandoned"]
 
 
 @dataclass(frozen=True)
@@ -32,6 +33,48 @@ class ScrapeRunCounts:
     changed_listings: int = 0
     missing_marked: int = 0
     alerts_sent: int = 0
+
+
+@dataclass(frozen=True)
+class BroadScrapeCampaign:
+    """Persisted progress for one resumable broad logical scope."""
+
+    id: int
+    scope_id: int
+    scope_name: str
+    status: BroadScrapeCampaignStatus
+    started_at: datetime
+    updated_at: datetime
+    completed_at: datetime | None
+    next_attempt_at: datetime
+    waf_challenge_count: int
+    error_message: str | None
+
+
+@dataclass(frozen=True)
+class BroadScrapeCampaignLeaf:
+    """One parent-sized or region-sized unit of a broad scrape campaign."""
+
+    campaign_id: int
+    leaf_key: str
+    ordinal: int
+    site_filter: Mapping[str, Any]
+    status: Literal["pending", "success", "split"]
+    attempt_count: int
+    pages_fetched: int
+    listings: tuple[Mapping[str, Any], ...]
+    last_attempt_at: datetime | None
+    completed_at: datetime | None
+    error_message: str | None
+
+
+@dataclass(frozen=True)
+class BroadScrapeCampaignCoverage:
+    """One completed leaf's time-bounded lifecycle evidence."""
+
+    site_filter: Mapping[str, Any]
+    completed_at: datetime
+    seen_external_ids: frozenset[str]
 
 
 @dataclass(frozen=True)
@@ -79,11 +122,12 @@ class ListingUpsertResult:
     previous_status: str | None
     previous_content_hash: str | None
     appearance_sequence: int
+    observation_applied: bool = True
 
     @property
     def confirmed_reappearance(self) -> bool:
         """Return whether this observation reactivated a confirmed-missing listing."""
-        return self.previous_status == "missing_confirmed"
+        return self.observation_applied and self.previous_status == "missing_confirmed"
 
 
 @dataclass(frozen=True)

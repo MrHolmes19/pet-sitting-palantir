@@ -90,6 +90,13 @@ if missing_count >= scope.missing_threshold_runs:
 
 Use `scope.missing_threshold_runs`, not one global value.
 
+Because `missing_count` is shared on the listing row, overlapping broad scopes
+must not both contribute evidence for the same geography. Regional fallback
+uses exclusive ownership: `all_nz` contributes South Island evidence,
+`north_island` contributes non-Auckland North Island evidence, and Auckland
+scopes alone contribute Auckland evidence. Direct full broad attempts do not
+contribute missing evidence.
+
 ## Suspicious Runs
 
 If a scope returns zero listings, treat it as suspicious:
