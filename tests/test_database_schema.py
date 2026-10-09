@@ -34,6 +34,8 @@ def test_migrations_create_current_tables_and_replace_placeholder_delivery_table
         "alert_filters",
         "alert_events",
         "alert_delivery_attempts",
+        "broad_scrape_campaigns",
+        "broad_scrape_campaign_leaves",
     ):
         assert f"create table {table_name}" in sql
 
@@ -112,6 +114,7 @@ def test_schema_has_core_constraints_and_indexes() -> None:
         "create index listings_start_date_idx",
         "create index alert_events_delivery_due_idx",
         "create unique index alert_delivery_attempts_unique_success_idx",
+        "create index broad_scrape_campaign_leaves_waf_attempt_idx",
     )
 
     for fragment in expected_fragments:

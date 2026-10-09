@@ -2,6 +2,7 @@
 
 from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
+from random import uniform
 from re import sub
 from time import monotonic, sleep
 from typing import Any
@@ -17,6 +18,8 @@ from pet_sitting_palantir.kiwihousesitters.constants import (
     HTTP_OK_STATUS,
     NEXT_PAGE_SELECTOR,
     PAGINATION_REQUEST_HEADERS,
+    WAF_CHALLENGE_ERROR_MARKER,
+    WAF_CHALLENGE_STATUS,
 )
 from pet_sitting_palantir.settings import (
     KIWIHOUSESITTERS_REQUEST_INTERVAL_SECONDS,
@@ -41,6 +44,14 @@ class KiwiHouseSittersHTTPError(requests.HTTPError):
     """HTTP error with sanitized response details useful for production diagnosis."""
 
 
+class KiwiHouseSittersWAFChallengeError(KiwiHouseSittersHTTPError):
+    """AWS WAF requires browser verification before it will serve search results."""
+
+
+class KiwiHouseSittersDeadlineExceeded(RuntimeError):
+    """Background work stopped before it could delay a priority scrape tick."""
+
+
 class KiwiHouseSittersClient:
     """Small HTTP client wrapper for KiwiHouseSitters."""
 
@@ -49,14 +60,18 @@ class KiwiHouseSittersClient:
         *,
         timeout_seconds: int = KIWIHOUSESITTERS_TIMEOUT_SECONDS,
         request_interval_seconds: float = KIWIHOUSESITTERS_REQUEST_INTERVAL_SECONDS,
+        request_interval_jitter_seconds: float = 0.0,
         transient_retry_attempts: int = KIWIHOUSESITTERS_TRANSIENT_RETRY_ATTEMPTS,
         transient_retry_backoff_seconds: float = (KIWIHOUSESITTERS_TRANSIENT_RETRY_BACKOFF_SECONDS),
         user_agent: str = DEFAULT_USER_AGENT,
         clock: Callable[[], float] = monotonic,
         sleep_for: Callable[[float], None] = sleep,
+        random_between: Callable[[float, float], float] = uniform,
         session_factory: Callable[[], requests.Session] = requests.Session,
+        deadline: float | None = None,
     ) -> None:
         _validate_request_interval_seconds(request_interval_seconds)
+        _validate_request_interval_seconds(request_interval_jitter_seconds)
         _validate_retry_settings(
             attempts=transient_retry_attempts,
             backoff_seconds=transient_retry_backoff_seconds,
@@ -64,14 +79,17 @@ class KiwiHouseSittersClient:
 
         self._timeout_seconds = timeout_seconds
         self._request_interval_seconds = request_interval_seconds
+        self._request_interval_jitter_seconds = request_interval_jitter_seconds
         self._transient_retry_attempts = transient_retry_attempts
         self._transient_retry_backoff_seconds = transient_retry_backoff_seconds
         self._clock = clock
         self._sleep_for = sleep_for
+        self._random_between = random_between
         self._last_request_started_at: float | None = None
         self._requests_started = 0
         self._user_agent = user_agent
         self._session_factory = session_factory
+        self._deadline = deadline
         self._session = self._new_session()
 
     def fetch_html(
@@ -86,7 +104,7 @@ class KiwiHouseSittersClient:
             request=lambda: self._session.get(
                 url,
                 headers=headers,
-                timeout=self._timeout_seconds,
+                timeout=self._request_timeout_seconds(),
             ),
         )
 
@@ -97,7 +115,7 @@ class KiwiHouseSittersClient:
             request=lambda: self._session.post(
                 url,
                 data=data,
-                timeout=self._timeout_seconds,
+                timeout=self._request_timeout_seconds(),
             ),
         )
 
@@ -193,17 +211,40 @@ class KiwiHouseSittersClient:
         raise AssertionError("transient retry loop ended unexpectedly")
 
     def _wait_before_retry(self, retry_number: int) -> None:
-        self._sleep_for(self._transient_retry_backoff_seconds * (2**retry_number))
+        self._sleep_with_deadline(self._transient_retry_backoff_seconds * (2**retry_number))
 
     def _wait_for_request_slot(self) -> None:
         now = self._clock()
         if self._last_request_started_at is not None:
-            remaining_delay = self._request_interval_seconds - (now - self._last_request_started_at)
+            request_interval = self._request_interval_seconds + self._random_between(
+                0,
+                self._request_interval_jitter_seconds,
+            )
+            remaining_delay = request_interval - (now - self._last_request_started_at)
             if remaining_delay > 0:
-                self._sleep_for(remaining_delay)
+                self._sleep_with_deadline(remaining_delay)
                 now = self._clock()
 
+        self._ensure_deadline_remaining()
         self._last_request_started_at = now
+
+    def _request_timeout_seconds(self) -> float:
+        remaining = self._ensure_deadline_remaining()
+        return self._timeout_seconds if remaining is None else min(self._timeout_seconds, remaining)
+
+    def _sleep_with_deadline(self, delay: float) -> None:
+        remaining = self._ensure_deadline_remaining()
+        if remaining is not None and delay >= remaining:
+            raise KiwiHouseSittersDeadlineExceeded("background scrape time budget exhausted")
+        self._sleep_for(delay)
+
+    def _ensure_deadline_remaining(self) -> float | None:
+        if self._deadline is None:
+            return None
+        remaining = self._deadline - self._clock()
+        if remaining <= 0:
+            raise KiwiHouseSittersDeadlineExceeded("background scrape time budget exhausted")
+        return remaining
 
 
 def _validate_request_interval_seconds(interval_seconds: float) -> None:
@@ -225,15 +266,26 @@ def _text_from_ok_response(
     request_number: int,
 ) -> str:
     if response.status_code != HTTP_OK_STATUS:
-        raise KiwiHouseSittersHTTPError(
-            _response_error_message(
-                response,
-                method=method,
-                request_number=request_number,
-            )
+        message = _response_error_message(
+            response,
+            method=method,
+            request_number=request_number,
         )
+        if _is_waf_challenge(response):
+            raise KiwiHouseSittersWAFChallengeError(f"{WAF_CHALLENGE_ERROR_MARKER}; {message}")
+        raise KiwiHouseSittersHTTPError(message)
 
     return response.text
+
+
+def _is_waf_challenge(response: requests.Response) -> bool:
+    if response.status_code != WAF_CHALLENGE_STATUS:
+        return False
+
+    waf_action = response.headers.get("x-amzn-waf-action", "").casefold()
+    return waf_action == "challenge" or any(
+        marker in response.text for marker in ("awsWafCookieDomainList", "window.gokuProps")
+    )
 
 
 def _response_error_message(

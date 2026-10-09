@@ -97,10 +97,11 @@ Persisted scraping must use `--max-pages all` so missing-listing lifecycle
 updates are based on complete scope coverage. Non-persisting local inspection
 runs may pass a numeric `--max-pages` to limit site load while testing.
 
-The client applies the minimum request delay defined in
-`src/pet_sitting_palantir/settings.py`. The selected production value is `1.5`
-seconds between requests. The previous `0.5`-second pace began receiving
-repeatable Cloudflare `429 Too Many Requests` responses after ten requests.
+The client applies the request pacing defined in
+`src/pet_sitting_palantir/settings.py`. Production waits at least `2.0` seconds
+between requests and adds a random `0-1.5` seconds. The previous `0.5`-second
+pace began receiving repeatable Cloudflare `429 Too Many Requests` responses
+after ten requests.
 
 Transient connection failures and upstream `408`/`5xx` responses receive a
 small bounded retry with exponential backoff. A `429` is not retried inside the
@@ -108,6 +109,17 @@ same scrape: the scope fails safely and the scheduler applies its scope-level
 failure cooldown. This avoids turning a rate limit into an immediate request
 burst. The diagnostic error includes the response's `Retry-After` value when
 one is supplied.
+
+An AWS WAF challenge is identified by HTTP `202` plus the
+`x-amzn-waf-action: challenge` header or the known AWS WAF JavaScript markers.
+It is not retried by the HTTP client because `requests` cannot execute the
+browser challenge. The scheduler logs it explicitly. Auckland retains its
+normal cadence after broad challenges, while broad work pauses for at least 24
+hours. An Auckland scope challenged directly receives its own 15-minute
+cooldown; no other Auckland scope is paused. Repeated campaign challenges double
+the broad pause up to seven days. A challenged parent-sized broad attempt
+converts to persistent regional fallback, and recent WAF history causes new
+campaigns to start with that fallback for 30 days.
 
 ## Search Result Cap And Splitting
 
@@ -140,8 +152,11 @@ Preferred split order:
 
 Location hierarchy:
 
-- All New Zealand should not scrape as one unfiltered search. Expand it into
-  North Island and South Island child searches.
+- All New Zealand first expands into North and South Island inside the existing
+  scraper. The production campaign may attempt that complete logical strategy
+  within its background deadline. After a WAF challenge or deadline it instead
+  persists one region at a time; the original parent scope is persisted only
+  after every fallback region succeeds.
 - Island searches over 200 should expand into region child searches.
 - Region searches over 200 should expand into subregion child searches.
 - Subregion searches over 200 should expand into all five sit-length child

@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pet-sitting-palantir.local/contracts/broad_scrape_campaigns.schema.json",
+  "title": "broad_scrape_campaigns",
+  "type": "object",
+  "description": "Durable progress for one direct or region-fallback execution of a broad logical scrape scope.",
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "integer",
+      "description": "Internal campaign id."
+    },
+    "scope_id": {
+      "type": "integer",
+      "description": "Existing scrape scope being fulfilled by the campaign."
+    },
+    "scope_name": {
+      "type": "string",
+      "description": "Stable parent scope name retained for logs and audit history."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "running",
+        "paused",
+        "completed",
+        "abandoned"
+      ],
+      "description": "Current campaign lifecycle state."
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Time the campaign was created."
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Time campaign state last changed."
+    },
+    "completed_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time",
+      "description": "Time the complete merged parent result committed."
+    },
+    "next_attempt_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Earliest time another campaign leaf may be attempted."
+    },
+    "waf_challenge_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of WAF challenges encountered by this campaign."
+    },
+    "error_message": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Most recent sanitized leaf failure, if paused."
+    }
+  },
+  "required": [
+    "id",
+    "scope_id",
+    "scope_name",
+    "status",
+    "started_at",
+    "updated_at",
+    "completed_at",
+    "next_attempt_at",
+    "waf_challenge_count",
+    "error_message"
+  ],
+  "examples": [
+    {
+      "id": 42,
+      "scope_id": 5,
+      "scope_name": "all_nz",
+      "status": "paused",
+      "started_at": "2026-10-09T06:00:00Z",
+      "updated_at": "2026-10-09T07:00:00Z",
+      "completed_at": null,
+      "next_attempt_at": "2026-10-10T07:00:00Z",
+      "waf_challenge_count": 1,
+      "error_message": "kiwihousesitters_waf_challenge"
+    }
+  ]
+}

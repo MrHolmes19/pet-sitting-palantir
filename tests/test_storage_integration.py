@@ -16,6 +16,10 @@ from pet_sitting_palantir.alerts import (
     ProviderDeliveryResult,
 )
 from pet_sitting_palantir.domain.models import Listing
+from pet_sitting_palantir.kiwihousesitters.client import (
+    KiwiHouseSittersDeadlineExceeded,
+    KiwiHouseSittersWAFChallengeError,
+)
 from pet_sitting_palantir.kiwihousesitters.scraper import ScrapeResult
 from pet_sitting_palantir.storage import (
     ScrapeRunCounts,
@@ -26,10 +30,12 @@ from pet_sitting_palantir.storage import (
     read_due_scrape_scopes,
     read_enabled_scrape_scope,
     read_enabled_scrape_scopes,
+    read_latest_waf_challenge_at,
     upsert_listing,
     upsert_listings,
 )
 from pet_sitting_palantir.workflows.deliver_alerts import deliver_due_alerts_with_connection
+from pet_sitting_palantir.workflows.healthcheck import read_healthcheck_summary
 from pet_sitting_palantir.workflows.run_due_scopes import run_due_scrape_scopes_with_connection
 from pet_sitting_palantir.workflows.scrape_and_store import scrape_and_store_scope_with_connection
 
@@ -212,6 +218,26 @@ def test_creates_and_closes_successful_scrape_run(postgres_connection) -> None:
     assert row["changed_listings"] == 1
     assert row["last_attempt_at"] is not None
     assert row["last_success_at"] is not None
+
+
+@pytest.mark.integration
+def test_reads_latest_waf_challenge_from_failed_run(postgres_connection) -> None:
+    assert read_latest_waf_challenge_at(postgres_connection) is None
+    scope = read_enabled_scrape_scope(postgres_connection, name="auckland_central")
+    assert scope is not None
+    run_id = create_scrape_run(
+        postgres_connection,
+        scope_id=scope.id,
+        scope_name=scope.name,
+    )
+    close_scrape_run(
+        postgres_connection,
+        run_id=run_id,
+        status="failed",
+        error_message="kiwihousesitters_waf_challenge; Unexpected status code: 202",
+    )
+
+    assert read_latest_waf_challenge_at(postgres_connection) is not None
 
 
 @pytest.mark.integration
@@ -1274,7 +1300,92 @@ def test_run_due_scrape_scopes_runs_only_due_scopes(postgres_connection) -> None
 
 
 @pytest.mark.integration
-def test_run_due_scrape_scopes_runs_only_broadest_scope_on_fresh_database(
+def test_waf_challenge_keeps_priority_running_while_broad_work_rests(
+    postgres_connection,
+) -> None:
+    scope = read_enabled_scrape_scope(postgres_connection, name="auckland_central")
+    assert scope is not None
+    run_id = create_scrape_run(
+        postgres_connection,
+        scope_id=scope.id,
+        scope_name=scope.name,
+    )
+    close_scrape_run(
+        postgres_connection,
+        run_id=run_id,
+        status="failed",
+        error_message="kiwihousesitters_waf_challenge; Unexpected status code: 202",
+    )
+
+    with postgres_connection.cursor() as cursor:
+        cursor.execute("update scrape_scopes set last_success_at = now()")
+        cursor.execute(
+            """
+            update scrape_scopes
+            set last_success_at = case
+              when name = 'all_nz' then now() - interval '2 days'
+              when name = 'auckland_central' then now() - interval '6 minutes'
+              else now() - interval '11 minutes'
+            end
+            where name in ('all_nz', 'auckland_central', 'north_shore_city')
+            """
+        )
+
+    priority_filters = []
+
+    def priority_scraper(site_filter, *, max_pages):
+        priority_filters.append(site_filter)
+        return ScrapeResult(
+            search_url="https://example.test/search",
+            pages_fetched=1,
+            listings=(_listing(external_id="golden-lane-listing"),),
+        )
+
+    instant = datetime.now(tz=UTC)
+    priority_during_local_cooldown = run_due_scrape_scopes_with_connection(
+        postgres_connection,
+        max_pages=None,
+        scraper=priority_scraper,
+        current_time=instant + timedelta(minutes=5),
+        phase="priority",
+    )
+    broad = run_due_scrape_scopes_with_connection(
+        postgres_connection,
+        max_pages=None,
+        scraper=lambda site_filter, *, max_pages: pytest.fail(
+            "WAF cooldown should prevent broad site requests"
+        ),
+        current_time=instant + timedelta(minutes=5),
+        phase="broad",
+    )
+    priority_after_local_cooldown = run_due_scrape_scopes_with_connection(
+        postgres_connection,
+        max_pages=None,
+        scraper=priority_scraper,
+        current_time=instant + timedelta(minutes=15),
+        phase="priority",
+    )
+
+    assert priority_during_local_cooldown.status == "success"
+    assert priority_after_local_cooldown.status == "success"
+    assert priority_filters == [
+        {
+            "state": "north-island",
+            "region": "auckland",
+            "subregion": "north-shore-city",
+        },
+        {
+            "state": "north-island",
+            "region": "auckland",
+            "subregion": "auckland-central",
+        }
+    ]
+    assert broad.status == "waf_cooldown"
+    assert broad.scopes_due == 0
+
+
+@pytest.mark.integration
+def test_run_due_scrape_scopes_starts_broad_campaign_without_advancing_parent_freshness(
     postgres_connection,
 ) -> None:
     seen_filters = []
@@ -1294,10 +1405,21 @@ def test_run_due_scrape_scopes_runs_only_broadest_scope_on_fresh_database(
     )
 
     assert result.status == "success"
-    assert result.scopes_due == 1
-    assert result.scopes_succeeded == 1
-    assert result.results[0].scope_name == "all_nz"
-    assert seen_filters == [{}]
+    assert result.scopes_due == 2
+    assert result.scopes_succeeded == 2
+    assert [stored.scope_name for stored in result.results] == [
+        "auckland_region",
+        "all_nz",
+    ]
+    assert seen_filters == [
+        {"state": "north-island", "region": "auckland"},
+        {},
+    ]
+    assert len(result.campaign_steps) == 1
+    assert result.campaign_steps[0].scope_name == "all_nz"
+    assert result.campaign_steps[0].status == "completed"
+    assert result.campaign_steps[0].completed_leaves == 1
+    assert result.campaign_steps[0].total_leaves == 1
 
     with postgres_connection.cursor() as cursor:
         cursor.execute(
@@ -1315,11 +1437,530 @@ def test_run_due_scrape_scopes_runs_only_broadest_scope_on_fresh_database(
     assert scope_state == [
         {"name": "all_nz", "attempted": True, "fresh": True},
         {"name": "auckland_central", "attempted": False, "fresh": True},
-        {"name": "auckland_region", "attempted": False, "fresh": True},
-        {"name": "north_island", "attempted": False, "fresh": True},
+        {"name": "auckland_region", "attempted": True, "fresh": True},
+        {"name": "north_island", "attempted": False, "fresh": False},
         {"name": "north_shore_city", "attempted": False, "fresh": True},
     ]
-    assert read_due_scrape_scopes(postgres_connection) == []
+    assert {scope.name for scope in read_due_scrape_scopes(postgres_connection)} == {
+        "north_island"
+    }
+
+
+@pytest.mark.integration
+def test_broad_completion_does_not_advance_golden_scope_freshness(
+    postgres_connection,
+) -> None:
+    golden_freshness = datetime(2026, 10, 8, 12, 0, tzinfo=UTC)
+    with postgres_connection.cursor() as cursor:
+        cursor.execute(
+            """
+            update scrape_scopes
+            set last_attempt_at = %s, last_success_at = %s
+            """,
+            (golden_freshness, golden_freshness),
+        )
+        cursor.execute(
+            """
+            update scrape_scopes
+            set last_success_at = %s
+            where name = 'all_nz'
+            """,
+            (golden_freshness - timedelta(days=2),),
+        )
+
+    result = run_due_scrape_scopes_with_connection(
+        postgres_connection,
+        max_pages=None,
+        scraper=lambda site_filter, *, max_pages: ScrapeResult(
+            search_url="https://example.test/search",
+            pages_fetched=1,
+            listings=(_listing(external_id="broad-only-listing"),),
+        ),
+        current_time=golden_freshness + timedelta(days=2),
+        phase="broad",
+    )
+
+    assert result.status == "success"
+    assert result.results[0].scope_name == "all_nz"
+    with postgres_connection.cursor() as cursor:
+        cursor.execute(
+            """
+            select name, last_attempt_at, last_success_at
+            from scrape_scopes
+            where name in ('auckland_central', 'auckland_region', 'north_shore_city')
+            order by name
+            """
+        )
+        golden_scopes = cursor.fetchall()
+
+    assert golden_scopes == [
+        {
+            "name": "auckland_central",
+            "last_attempt_at": golden_freshness,
+            "last_success_at": golden_freshness,
+        },
+        {
+            "name": "auckland_region",
+            "last_attempt_at": golden_freshness,
+            "last_success_at": golden_freshness,
+        },
+        {
+            "name": "north_shore_city",
+            "last_attempt_at": golden_freshness,
+            "last_success_at": golden_freshness,
+        },
+    ]
+
+
+@pytest.mark.integration
+def test_broad_campaign_merges_regions_into_original_parent_scope(postgres_connection) -> None:
+    with postgres_connection.cursor() as cursor:
+        cursor.execute("update scrape_scopes set last_success_at = now()")
+        cursor.execute(
+            """
+            update scrape_scopes
+            set last_success_at = now() - interval '2 days'
+            where name = 'all_nz'
+            """
+        )
+
+    seen_regions = []
+
+    def fake_scraper(site_filter, *, max_pages):
+        region = site_filter["region"]
+        seen_regions.append(region)
+        return ScrapeResult(
+            search_url="https://example.test/search",
+            pages_fetched=1,
+            listings=(
+                _listing(
+                    external_id=f"campaign-{region}",
+                    content_hash=f"hash-{region}",
+                    url=f"https://example.test/listing/{region}",
+                ),
+            ),
+        )
+
+    started_at = datetime.now(tz=UTC)
+    _record_historical_waf(
+        postgres_connection,
+        scope_name="all_nz",
+        challenged_at=started_at - timedelta(days=2),
+    )
+    result = None
+    for step_number in range(15):
+        result = run_due_scrape_scopes_with_connection(
+            postgres_connection,
+            max_pages=None,
+            scraper=fake_scraper,
+            current_time=started_at + timedelta(minutes=10 * step_number),
+        )
+
+    assert result is not None
+    assert len(seen_regions) == 15
+    assert len(set(seen_regions)) == 15
+    assert result.campaign_steps[0].status == "completed"
+    assert result.results[0].scope_name == "all_nz"
+    assert result.results[0].listings_seen == 15
+
+    with postgres_connection.cursor() as cursor:
+        cursor.execute(
+            """
+            select status, completed_at
+            from broad_scrape_campaigns
+            where scope_name = 'all_nz'
+            """
+        )
+        campaign = cursor.fetchone()
+        cursor.execute(
+            """
+            select scope_name, status, listings_seen
+            from scrape_runs
+            order by id desc
+            limit 1
+            """
+        )
+        parent_run = cursor.fetchone()
+        cursor.execute(
+            """
+            select count(*) as populated_leaves
+            from broad_scrape_campaign_leaves
+            where jsonb_array_length(listings) > 0
+            """
+        )
+        populated_leaves = cursor.fetchone()["populated_leaves"]
+
+    assert campaign["status"] == "completed"
+    assert campaign["completed_at"] is not None
+    assert parent_run == {
+        "scope_name": "all_nz",
+        "status": "success",
+        "listings_seen": 15,
+    }
+    assert populated_leaves == 0
+
+
+@pytest.mark.integration
+def test_overlapping_broad_campaigns_partition_missing_evidence_by_island(
+    postgres_connection,
+) -> None:
+    with postgres_connection.cursor() as cursor:
+        cursor.execute("update scrape_scopes set last_success_at = now()")
+        cursor.execute(
+            """
+            update scrape_scopes
+            set last_success_at = now() - interval '2 days'
+            where name in ('all_nz', 'north_island')
+            """
+        )
+
+    seed_run_id = create_scrape_run(
+        postgres_connection,
+        scope_id=None,
+        scope_name="missing-authority-seed",
+    )
+    for listing in (
+        _listing(
+            external_id="absent-northland",
+            island="North Island",
+            region="Northland",
+            subregion="Whangarei",
+            city="Whangarei",
+        ),
+        _listing(
+            external_id="absent-canterbury",
+            island="South Island",
+            region="Canterbury",
+            subregion="Christchurch",
+            city="Christchurch",
+        ),
+    ):
+        upsert_listing(
+            postgres_connection,
+            listing=listing_record_from_scraped_listing(listing),
+            run_id=seed_run_id,
+        )
+
+    started_at = datetime.now(tz=UTC)
+    for scope_name in ("all_nz", "north_island"):
+        _record_historical_waf(
+            postgres_connection,
+            scope_name=scope_name,
+            challenged_at=started_at - timedelta(days=2),
+        )
+
+    completed_scope_names = []
+
+    def fake_scraper(site_filter, *, max_pages):
+        region = site_filter["region"]
+        return ScrapeResult(
+            search_url="https://example.test/search",
+            pages_fetched=1,
+            listings=(_listing(external_id=f"partition-observed-{region}"),),
+        )
+
+    for step_number in range(25):
+        result = run_due_scrape_scopes_with_connection(
+            postgres_connection,
+            max_pages=None,
+            scraper=fake_scraper,
+            current_time=started_at + timedelta(minutes=10 * step_number),
+            phase="broad",
+        )
+        completed_scope_names.extend(stored.scope_name for stored in result.results)
+
+    with postgres_connection.cursor() as cursor:
+        cursor.execute(
+            """
+            select external_id, status, missing_count
+            from listings
+            where external_id in ('absent-northland', 'absent-canterbury')
+            order by external_id
+            """
+        )
+        missing_rows = cursor.fetchall()
+
+    assert completed_scope_names == ["all_nz", "north_island"]
+    assert missing_rows == [
+        {
+            "external_id": "absent-canterbury",
+            "status": "missing_once",
+            "missing_count": 1,
+        },
+        {
+            "external_id": "absent-northland",
+            "status": "missing_once",
+            "missing_count": 1,
+        },
+    ]
+
+
+@pytest.mark.integration
+def test_broad_campaign_does_not_overwrite_or_mark_newer_observations_missing(
+    postgres_connection,
+) -> None:
+    with postgres_connection.cursor() as cursor:
+        cursor.execute("update scrape_scopes set last_success_at = now()")
+        cursor.execute(
+            """
+            update scrape_scopes
+            set last_success_at = now() - interval '2 days'
+            where name = 'all_nz'
+            """
+        )
+
+    def fake_scraper(site_filter, *, max_pages):
+        region = site_filter["region"]
+        return ScrapeResult(
+            search_url="https://example.test/search",
+            pages_fetched=1,
+            listings=(
+                _listing(
+                    external_id=(
+                        "campaign-shared-listing" if region == "auckland" else f"leaf-{region}"
+                    ),
+                    content_hash=f"campaign-{region}",
+                    url=f"https://example.test/listing/{region}",
+                ),
+            ),
+        )
+
+    started_at = datetime.now(tz=UTC)
+    _record_historical_waf(
+        postgres_connection,
+        scope_name="all_nz",
+        challenged_at=started_at - timedelta(days=2),
+    )
+    run_due_scrape_scopes_with_connection(
+        postgres_connection,
+        max_pages=None,
+        scraper=fake_scraper,
+        current_time=started_at,
+    )
+
+    newer_observation_at = started_at + timedelta(minutes=5)
+    seed_run_id = create_scrape_run(
+        postgres_connection,
+        scope_id=None,
+        scope_name="newer_auckland_observation",
+    )
+    for listing in (
+        _listing(
+            external_id="campaign-shared-listing",
+            content_hash="newer-content",
+        ),
+        _listing(
+            external_id="appeared-after-auckland-leaf",
+            content_hash="new-listing-content",
+        ),
+    ):
+        upsert_listing(
+            postgres_connection,
+            listing=listing_record_from_scraped_listing(listing),
+            run_id=seed_run_id,
+            observed_at=newer_observation_at,
+        )
+
+    for step_number in range(1, 15):
+        result = run_due_scrape_scopes_with_connection(
+            postgres_connection,
+            max_pages=None,
+            scraper=fake_scraper,
+            current_time=started_at + timedelta(minutes=10 * step_number),
+        )
+
+    assert result.campaign_steps[0].status == "completed"
+    with postgres_connection.cursor() as cursor:
+        cursor.execute(
+            """
+            select external_id, content_hash, status, missing_count, last_seen_at
+            from listings
+            where external_id in (
+              'campaign-shared-listing',
+              'appeared-after-auckland-leaf'
+            )
+            order by external_id
+            """
+        )
+        rows = cursor.fetchall()
+
+    assert rows == [
+        {
+            "external_id": "appeared-after-auckland-leaf",
+            "content_hash": "new-listing-content",
+            "status": "active",
+            "missing_count": 0,
+            "last_seen_at": newer_observation_at,
+        },
+        {
+            "external_id": "campaign-shared-listing",
+            "content_hash": "newer-content",
+            "status": "active",
+            "missing_count": 0,
+            "last_seen_at": newer_observation_at,
+        },
+    ]
+
+
+@pytest.mark.integration
+def test_broad_campaign_pauses_on_waf_and_keeps_completed_progress(
+    postgres_connection,
+) -> None:
+    with postgres_connection.cursor() as cursor:
+        cursor.execute("update scrape_scopes set last_success_at = now()")
+        cursor.execute(
+            """
+            update scrape_scopes
+            set last_success_at = now() - interval '2 days'
+            where name = 'all_nz'
+            """
+        )
+
+    def challenged_scraper(site_filter, *, max_pages):
+        raise KiwiHouseSittersWAFChallengeError(
+            "kiwihousesitters_waf_challenge; Unexpected status code: 202"
+        )
+
+    instant = datetime.now(tz=UTC)
+    result = run_due_scrape_scopes_with_connection(
+        postgres_connection,
+        max_pages=None,
+        scraper=challenged_scraper,
+        current_time=instant,
+    )
+
+    assert result.status == "failed"
+    assert result.campaign_steps[0].status == "waf_paused"
+    assert result.campaign_steps[0].leaf_key == "__full__"
+    assert result.campaign_steps[0].waf_challenge_count == 1
+    assert result.campaign_steps[0].next_attempt_at == instant + timedelta(hours=24)
+
+    with postgres_connection.cursor() as cursor:
+        cursor.execute(
+            """
+            select status, waf_challenge_count, next_attempt_at
+            from broad_scrape_campaigns
+            where scope_name = 'all_nz'
+            """
+        )
+        campaign = cursor.fetchone()
+        cursor.execute(
+            """
+            select leaf_key, status, attempt_count
+            from broad_scrape_campaign_leaves
+            where campaign_id = (
+              select id from broad_scrape_campaigns where scope_name = 'all_nz'
+            )
+              and leaf_key in ('__full__', 'auckland')
+            order by leaf_key
+            """
+        )
+        leaves = cursor.fetchall()
+        cursor.execute(
+            """
+            select error_message
+            from scrape_runs
+            where status = 'failed'
+            order by id desc
+            limit 1
+            """
+        )
+        failed_attempt = cursor.fetchone()
+
+    assert campaign == {
+        "status": "paused",
+        "waf_challenge_count": 1,
+        "next_attempt_at": instant + timedelta(hours=24),
+    }
+    assert leaves == [
+        {"leaf_key": "__full__", "status": "split", "attempt_count": 1},
+        {"leaf_key": "auckland", "status": "pending", "attempt_count": 0},
+    ]
+    assert failed_attempt == {"error_message": "kiwihousesitters_waf_challenge"}
+    healthcheck = read_healthcheck_summary(
+        postgres_connection,
+        current_time=instant + timedelta(minutes=1),
+    )
+    assert healthcheck.failed_runs == 1
+
+    deferred = run_due_scrape_scopes_with_connection(
+        postgres_connection,
+        max_pages=None,
+        scraper=lambda site_filter, *, max_pages: pytest.fail(
+            "paused campaign should not request the site"
+        ),
+        current_time=instant + timedelta(hours=1),
+    )
+    assert deferred.status == "waf_cooldown"
+    assert deferred.campaign_steps == ()
+
+    retried_filters = []
+
+    def recovered_scraper(site_filter, *, max_pages):
+        retried_filters.append(site_filter)
+        return ScrapeResult(
+            search_url="https://example.test/search",
+            pages_fetched=1,
+            listings=(_listing(external_id="recovered-auckland-leaf"),),
+        )
+
+    resumed = run_due_scrape_scopes_with_connection(
+        postgres_connection,
+        max_pages=None,
+        scraper=recovered_scraper,
+        current_time=instant + timedelta(hours=24, minutes=1),
+    )
+    assert resumed.campaign_steps[0].status == "in_progress"
+    assert resumed.campaign_steps[0].leaf_key == "auckland"
+    assert resumed.campaign_steps[0].completed_leaves == 1
+    assert retried_filters == [{"state": "north-island", "region": "auckland"}]
+
+
+@pytest.mark.integration
+def test_direct_broad_deadline_splits_into_regional_fallback(postgres_connection) -> None:
+    with postgres_connection.cursor() as cursor:
+        cursor.execute("update scrape_scopes set last_success_at = now()")
+        cursor.execute(
+            """
+            update scrape_scopes
+            set last_success_at = now() - interval '2 days'
+            where name = 'all_nz'
+            """
+        )
+
+    instant = datetime.now(tz=UTC)
+    result = run_due_scrape_scopes_with_connection(
+        postgres_connection,
+        max_pages=None,
+        scraper=lambda site_filter, *, max_pages: (_ for _ in ()).throw(
+            KiwiHouseSittersDeadlineExceeded("background deadline reached")
+        ),
+        current_time=instant,
+        phase="broad",
+    )
+
+    assert result.status == "failed"
+    assert result.campaign_steps[0].status == "split_paused"
+    assert result.campaign_steps[0].leaf_key == "__full__"
+    assert result.campaign_steps[0].completed_leaves == 0
+    assert result.campaign_steps[0].total_leaves == 15
+    assert result.campaign_steps[0].next_attempt_at == instant + timedelta(minutes=10)
+
+    with postgres_connection.cursor() as cursor:
+        cursor.execute(
+            """
+            select leaf_key, status
+            from broad_scrape_campaign_leaves
+            where campaign_id = %s
+            order by ordinal
+            """,
+            (result.campaign_steps[0].campaign_id,),
+        )
+        leaves = cursor.fetchall()
+
+    assert leaves[0] == {"leaf_key": "__full__", "status": "split"}
+    assert len(leaves) == 16
+    assert all(leaf["status"] == "pending" for leaf in leaves[1:])
 
 
 @pytest.mark.integration
@@ -1443,6 +2084,37 @@ def test_scrape_and_store_scope_closes_failed_run(postgres_connection) -> None:
 
 
 @pytest.mark.integration
+def test_scrape_and_store_scope_sanitizes_waf_failure(postgres_connection) -> None:
+    def challenged_scraper(site_filter, *, max_pages):
+        raise KiwiHouseSittersWAFChallengeError(
+            "kiwihousesitters_waf_challenge; body_snippet=window.gokuProps secret-token"
+        )
+
+    with pytest.raises(KiwiHouseSittersWAFChallengeError):
+        scrape_and_store_scope_with_connection(
+            postgres_connection,
+            scope_name="auckland_central",
+            scraper=challenged_scraper,
+        )
+
+    with postgres_connection.cursor() as cursor:
+        cursor.execute(
+            """
+            select status, error_message
+            from scrape_runs
+            order by id desc
+            limit 1
+            """
+        )
+        run = cursor.fetchone()
+
+    assert run == {
+        "status": "failed",
+        "error_message": "kiwihousesitters_waf_challenge",
+    }
+
+
+@pytest.mark.integration
 def test_scrape_and_store_scope_closes_interrupted_run(postgres_connection) -> None:
     def interrupted_scraper(site_filter, *, max_pages):
         raise KeyboardInterrupt
@@ -1469,12 +2141,46 @@ def test_scrape_and_store_scope_closes_interrupted_run(postgres_connection) -> N
     assert run["error_message"] == "KeyboardInterrupt"
 
 
+def _record_historical_waf(
+    connection,
+    *,
+    scope_name: str,
+    challenged_at: datetime,
+) -> None:
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            insert into scrape_runs (
+              scope_id,
+              scope_name,
+              started_at,
+              finished_at,
+              status,
+              error_message
+            )
+            select
+              id,
+              name,
+              %s,
+              %s,
+              'failed',
+              'kiwihousesitters_waf_challenge'
+            from scrape_scopes
+            where name = %s
+            """,
+            (challenged_at, challenged_at, scope_name),
+        )
+
+
 def _listing(
     *,
     external_id: str = "614587",
     content_hash: str = "hash-v1",
     title: str = "Stonefields Auckland - Auckland - Auckland - Central",
+    island: str = "North Island",
+    region: str = "Auckland",
     subregion: str = "Auckland - Central",
+    city: str = "Stonefields",
     start_date: date = date(2027, 5, 5),
     end_date: date = date(2027, 5, 11),
     url: str | None = "https://example.test/listing/614587",
@@ -1482,10 +2188,10 @@ def _listing(
     return Listing(
         external_id=external_id,
         content_hash=content_hash,
-        island="North Island",
-        region="Auckland",
+        island=island,
+        region=region,
         subregion=subregion,
-        city="Stonefields",
+        city=city,
         duration_days=6,
         start_date=start_date,
         end_date=end_date,

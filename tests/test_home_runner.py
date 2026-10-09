@@ -5,6 +5,8 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from pet_sitting_palantir.alerts import CreatedAlertEvent
+from pet_sitting_palantir.kiwihousesitters.constants import WAF_CHALLENGE_ERROR_MARKER
+from pet_sitting_palantir.workflows.broad_scrape_campaign import BroadCampaignStep
 from pet_sitting_palantir.workflows.deliver_alerts import AlertDeliverySummary
 from pet_sitting_palantir.workflows.home_runner import (
     HealthcheckDeliverySummary,
@@ -81,6 +83,144 @@ def test_tick_logs_scope_failure_detail(caplog) -> None:
 
     assert "tick_failed due=1 failed=1" in caplog.text
     assert "scope_fail name=all_nz error=Unexpected status code: 403" in (caplog.text)
+
+
+def test_tick_logs_waf_campaign_pause_with_resume_time(caplog) -> None:
+    resume_after = datetime(2026, 10, 10, 10, 0, tzinfo=ZoneInfo("Pacific/Auckland"))
+    caplog.set_level("INFO", logger="test-runner")
+
+    _run_tick(
+        max_pages=None,
+        runtime_logger=getLogger("test-runner"),
+        due_scope_runner=lambda *, max_pages: DueScopeRunResult(
+            status="failed",
+            scopes_due=1,
+            scopes_succeeded=0,
+            scopes_failed=1,
+            results=(),
+            failures=(
+                DueScopeFailure(
+                    scope_name="all_nz",
+                    error_message="WAF challenge; campaign=42",
+                ),
+            ),
+            campaign_steps=(
+                BroadCampaignStep(
+                    scope_name="all_nz",
+                    campaign_id=42,
+                    status="waf_paused",
+                    leaf_key="waikato",
+                    completed_leaves=4,
+                    total_leaves=15,
+                    next_attempt_at=resume_after,
+                    waf_challenge_count=1,
+                ),
+            ),
+        ),
+        alert_delivery_runner=_no_deliveries,
+    )
+
+    assert (
+        "waf_challenge scope=all_nz campaign=42 leaf=waikato completed=4/15 "
+        "challenge_count=1 resume_after=2026-10-10T10:00:00+13:00"
+    ) in caplog.text
+
+
+def test_tick_logs_direct_scope_waf_without_response_body(caplog) -> None:
+    caplog.set_level("INFO", logger="test-runner")
+
+    _run_tick(
+        max_pages=None,
+        runtime_logger=getLogger("test-runner"),
+        due_scope_runner=lambda *, max_pages: DueScopeRunResult(
+            status="failed",
+            scopes_due=1,
+            scopes_succeeded=0,
+            scopes_failed=1,
+            results=(),
+            failures=(
+                DueScopeFailure(
+                    scope_name="auckland_central",
+                    error_message=WAF_CHALLENGE_ERROR_MARKER,
+                ),
+            ),
+        ),
+        alert_delivery_runner=_no_deliveries,
+        broad_scope_runner=lambda **kwargs: pytest.fail(
+            "priority failure must suppress background work"
+        ),
+    )
+
+    assert (
+        "waf_challenge scope=auckland_central campaign=none "
+        "action=broad_rest_24h priority_retry=15m_scope_local"
+    ) in caplog.text
+
+
+def test_tick_delivers_priority_alerts_before_background_work() -> None:
+    sequence = []
+
+    def priority_runner(*, max_pages):
+        sequence.append("priority")
+        return DueScopeRunResult(
+            status="nothing_due",
+            scopes_due=0,
+            scopes_succeeded=0,
+            scopes_failed=0,
+            results=(),
+            failures=(),
+        )
+
+    def delivery_runner():
+        sequence.append("delivery")
+        return _no_deliveries()
+
+    def broad_runner(*, max_pages, time_budget_seconds):
+        sequence.append(("broad", time_budget_seconds))
+        return DueScopeRunResult(
+            status="nothing_due",
+            scopes_due=0,
+            scopes_succeeded=0,
+            scopes_failed=0,
+            results=(),
+            failures=(),
+        )
+
+    _run_tick(
+        max_pages=None,
+        due_scope_runner=priority_runner,
+        alert_delivery_runner=delivery_runner,
+        broad_scope_runner=broad_runner,
+        runtime_logger=getLogger("test-runner"),
+        clock=lambda: 1,
+    )
+
+    assert sequence == ["priority", "delivery", ("broad", 239)]
+
+
+def test_tick_skips_background_when_priority_crosses_original_tick_window(caplog) -> None:
+    clock_values = iter((1, 301))
+    caplog.set_level("INFO", logger="test-runner")
+
+    _run_tick(
+        max_pages=None,
+        due_scope_runner=lambda *, max_pages: DueScopeRunResult(
+            status="success",
+            scopes_due=1,
+            scopes_succeeded=1,
+            scopes_failed=0,
+            results=(),
+            failures=(),
+        ),
+        alert_delivery_runner=_no_deliveries,
+        broad_scope_runner=lambda **kwargs: pytest.fail(
+            "background work must not borrow time from the next priority window"
+        ),
+        runtime_logger=getLogger("test-runner"),
+        clock=lambda: next(clock_values),
+    )
+
+    assert "broad_skip reason=priority_window remaining=-1s" in caplog.text
 
 
 def test_tick_logs_successful_scope_detail(caplog) -> None:
@@ -228,13 +368,13 @@ def test_daily_healthcheck_is_not_due_after_1005_window() -> None:
 def test_runner_startup_logs_selected_request_interval(monkeypatch, caplog, tmp_path) -> None:
     monkeypatch.setattr(
         "pet_sitting_palantir.workflows.home_runner._run_continuously",
-        lambda *, max_pages: None,
+        lambda *, max_pages, broad_scope_runner: None,
     )
     caplog.set_level("INFO", logger="pet_sitting_palantir.workflows.home_runner")
 
     run_home_runner(lock_file=tmp_path / "home-runner.lock")
 
-    assert "runner_start tick=300s request_delay=1.5s" in caplog.text
+    assert "runner_start tick=300s request_delay=2.0s request_jitter=0-1.5s" in caplog.text
 
 
 def test_single_instance_lock_rejects_parallel_runner(tmp_path) -> None:

@@ -132,6 +132,7 @@ def test_initialize_database_applies_schema_and_seed_to_real_postgres() -> None:
                     "20260503000100_initial_schema.sql",
                     "20260526000100_alert_events_and_delivery_attempts.sql",
                     "20260526000200_add_first_seen_context_for_existing_databases.sql",
+                    "20261009000100_add_resumable_broad_scrape_campaigns.sql",
                 ]
             finally:
                 cursor.execute(
@@ -183,6 +184,7 @@ def test_initialize_database_upgrades_schema_created_before_migration_history() 
                     "20260503000100_initial_schema.sql",
                     "20260526000100_alert_events_and_delivery_attempts.sql",
                     "20260526000200_add_first_seen_context_for_existing_databases.sql",
+                    "20261009000100_add_resumable_broad_scrape_campaigns.sql",
                 ]
             finally:
                 cursor.execute(

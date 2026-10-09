@@ -1,7 +1,11 @@
 import pytest
 import requests
 
-from pet_sitting_palantir.kiwihousesitters.client import KiwiHouseSittersClient
+from pet_sitting_palantir.kiwihousesitters.client import (
+    KiwiHouseSittersClient,
+    KiwiHouseSittersDeadlineExceeded,
+    KiwiHouseSittersWAFChallengeError,
+)
 
 
 class FakeResponse:
@@ -77,6 +81,21 @@ def test_client_rejects_negative_request_interval() -> None:
         KiwiHouseSittersClient(request_interval_seconds=-1)
 
 
+def test_client_deadline_stops_background_request_before_it_starts() -> None:
+    fake_session = FakeSession(FakeResponse(status_code=200))
+    client = KiwiHouseSittersClient(
+        request_interval_seconds=0,
+        deadline=10,
+        clock=lambda: 10,
+        session_factory=lambda: fake_session,
+    )
+
+    with pytest.raises(KiwiHouseSittersDeadlineExceeded):
+        client.fetch_html("https://example.test/search")
+
+    assert fake_session.requested_urls == []
+
+
 def test_client_retries_transient_statuses_with_exponential_backoff() -> None:
     sleep_delays: list[float] = []
     fake_session = FakeSession(
@@ -137,6 +156,44 @@ def test_client_does_not_immediately_retry_rate_limit_response() -> None:
     assert fake_session.requested_urls == ["https://example.test/search"]
 
 
+def test_client_classifies_aws_waf_challenge_without_retrying() -> None:
+    fake_session = FakeSession(
+        [
+            FakeResponse(
+                status_code=202,
+                text="<script>window.awsWafCookieDomainList = [];</script>",
+                headers={"server": "cloudflare"},
+            ),
+            FakeResponse(status_code=200, text="should not be requested"),
+        ]
+    )
+    client = KiwiHouseSittersClient(
+        request_interval_seconds=0,
+        transient_retry_attempts=2,
+        session_factory=lambda: fake_session,
+    )
+
+    with pytest.raises(KiwiHouseSittersWAFChallengeError) as error:
+        client.fetch_html("https://example.test/search")
+
+    assert "kiwihousesitters_waf_challenge" in str(error.value)
+    assert "Unexpected status code: 202" in str(error.value)
+    assert fake_session.requested_urls == ["https://example.test/search"]
+
+
+def test_client_classifies_waf_challenge_header_without_body_marker() -> None:
+    client = KiwiHouseSittersClient(request_interval_seconds=0)
+    client._session = FakeSession(
+        FakeResponse(
+            status_code=202,
+            headers={"x-amzn-waf-action": "challenge"},
+        )
+    )
+
+    with pytest.raises(KiwiHouseSittersWAFChallengeError):
+        client.fetch_html("https://example.test/search")
+
+
 def test_filtered_first_page_spaces_get_and_post_requests() -> None:
     times = iter((100.0, 100.2, 101.0))
     sleep_delays: list[float] = []
@@ -154,6 +211,27 @@ def test_filtered_first_page_spaces_get_and_post_requests() -> None:
     )
 
     assert sleep_delays == [pytest.approx(0.8)]
+
+
+def test_filtered_first_page_adds_bounded_request_jitter() -> None:
+    times = iter((100.0, 100.2, 101.5))
+    sleep_delays: list[float] = []
+    fake_session = FakeSession([FakeResponse(status_code=200), FakeResponse(status_code=200)])
+    client = KiwiHouseSittersClient(
+        request_interval_seconds=1.0,
+        request_interval_jitter_seconds=1.5,
+        clock=lambda: next(times),
+        sleep_for=sleep_delays.append,
+        random_between=lambda lower, upper: 0.5,
+        session_factory=lambda: fake_session,
+    )
+
+    client.fetch_first_search_page(
+        "https://example.test/search",
+        first_page_form_data={"state": "north-island"},
+    )
+
+    assert sleep_delays == [pytest.approx(1.3)]
 
 
 def test_filtered_first_pages_bootstrap_each_new_server_side_search() -> None:
