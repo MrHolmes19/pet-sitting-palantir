@@ -9,8 +9,8 @@
       },
       "local_filter": {
         "date_window_match": "contained",
-        "start_date_on_or_after": "2026-12-18",
-        "end_date_on_or_before": "2027-04-10",
+        "start_date_on_or_after": "2027-01-30",
+        "end_date_on_or_before": "2027-04-20",
         "min_duration_days": 29,
         "dogs_allowed": true,
         "cats_allowed": true,
@@ -22,7 +22,7 @@
       }
     },
     {
-      "name": "-- Beginning of 2027",
+      "name": "Post sailing",
       "site_filter": {
         "state": "north-island",
         "region": "auckland",
@@ -30,8 +30,8 @@
       },
       "local_filter": {
         "date_window_match": "contained",
-        "start_date_on_or_after": "2026-12-26",
-        "end_date_on_or_before": "2027-02-28",
+        "start_date_on_or_after": "2027-01-30",
+        "end_date_on_or_before": "2027-03-31",
         "min_duration_days": 14,
         "dogs_allowed": true,
         "cats_allowed": true,
@@ -50,14 +50,14 @@
       },
       "local_filter": {
         "date_window_match": "contained",
-        "start_date_on_or_after": "2027-01-01",
-        "end_date_on_or_before": "2027-03-30",
+        "start_date_on_or_after": "2027-01-30",
+        "end_date_on_or_before": "2027-03-31",
         "min_duration_days": 14,
         "cats_allowed": true
       }
     },
     {
-      "name": "-- Connection in January",
+      "name": "January gap",
       "site_filter": {
         "state": "north-island",
         "region": "auckland",
@@ -65,9 +65,9 @@
       },
       "local_filter": {
         "date_window_match": "contained",
-        "start_date_on_or_after": "2027-01-02",
-        "end_date_on_or_before": "2027-01-20",
-        "min_duration_days": 7,
+        "start_date_on_or_after": "2026-11-03",
+        "end_date_on_or_before": "2026-11-11",
+        "min_duration_days": 3,
         "dogs_allowed": true,
         "cats_allowed": true,
         "fish_allowed": true,
@@ -77,7 +77,7 @@
       }
     },
     {
-      "name": "-- Beginning of 2027 - North Shore",
+      "name": "January gap North Shore",
       "site_filter": {
         "state": "north-island",
         "region": "auckland",
@@ -85,29 +85,29 @@
       },
       "local_filter": {
         "date_window_match": "contained",
-        "start_date_on_or_after": "2026-12-27",
-        "end_date_on_or_before": "2027-02-15",
+        "start_date_on_or_after": "2026-11-03",
+        "end_date_on_or_before": "2026-11-11",
+        "min_duration_days": 3,
+        "dogs_allowed": true,
+        "cats_allowed": true,
+        "fish_allowed": true,
+        "birds_allowed": true,
+        "rabbits_guinea_pigs_allowed": true,
+        "no_pets_allowed": true
+      }
+    },
+    {
+      "name": "Post sailing North Shore",
+      "site_filter": {
+        "state": "north-island",
+        "region": "auckland",
+        "subregion": "north-shore-city"
+      },
+      "local_filter": {
+        "date_window_match": "contained",
+        "start_date_on_or_after": "2027-01-30",
+        "end_date_on_or_before": "2027-03-31",
         "min_duration_days": 14,
-        "dogs_allowed": true,
-        "cats_allowed": true,
-        "fish_allowed": true,
-        "birds_allowed": true,
-        "rabbits_guinea_pigs_allowed": true,
-        "no_pets_allowed": true
-      }
-    },
-    {
-      "name": "-- Connection in January - North Shore",
-      "site_filter": {
-        "state": "north-island",
-        "region": "auckland",
-        "subregion": "north-shore-city"
-      },
-      "local_filter": {
-        "date_window_match": "contained",
-        "start_date_on_or_after": "2027-01-02",
-        "end_date_on_or_before": "2027-01-20",
-        "min_duration_days": 7,
         "dogs_allowed": true,
         "cats_allowed": true,
         "fish_allowed": true,
