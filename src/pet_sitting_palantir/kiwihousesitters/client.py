@@ -10,11 +10,11 @@ from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup
+from curl_cffi import requests as browser_requests
 
 from pet_sitting_palantir.kiwihousesitters.constants import (
     BASE_URL,
-    DEFAULT_REQUEST_HEADERS,
-    DEFAULT_USER_AGENT,
+    DEFAULT_BROWSER_IMPERSONATION,
     HTTP_OK_STATUS,
     NEXT_PAGE_SELECTOR,
     PAGINATION_REQUEST_HEADERS,
@@ -45,7 +45,7 @@ class KiwiHouseSittersHTTPError(requests.HTTPError):
 
 
 class KiwiHouseSittersWAFChallengeError(KiwiHouseSittersHTTPError):
-    """AWS WAF requires browser verification before it will serve search results."""
+    """The site requires browser verification before serving search results."""
 
 
 class KiwiHouseSittersDeadlineExceeded(RuntimeError):
@@ -63,11 +63,11 @@ class KiwiHouseSittersClient:
         request_interval_jitter_seconds: float = 0.0,
         transient_retry_attempts: int = KIWIHOUSESITTERS_TRANSIENT_RETRY_ATTEMPTS,
         transient_retry_backoff_seconds: float = (KIWIHOUSESITTERS_TRANSIENT_RETRY_BACKOFF_SECONDS),
-        user_agent: str = DEFAULT_USER_AGENT,
+        user_agent: str | None = None,
         clock: Callable[[], float] = monotonic,
         sleep_for: Callable[[float], None] = sleep,
         random_between: Callable[[float, float], float] = uniform,
-        session_factory: Callable[[], requests.Session] = requests.Session,
+        session_factory: Callable[[], requests.Session | browser_requests.Session] | None = None,
         deadline: float | None = None,
     ) -> None:
         _validate_request_interval_seconds(request_interval_seconds)
@@ -88,7 +88,7 @@ class KiwiHouseSittersClient:
         self._last_request_started_at: float | None = None
         self._requests_started = 0
         self._user_agent = user_agent
-        self._session_factory = session_factory
+        self._session_factory = session_factory or _browser_session
         self._deadline = deadline
         self._session = self._new_session()
 
@@ -173,30 +173,40 @@ class KiwiHouseSittersClient:
 
         return PageFetch(url=initial_url, html=html, page_number=1)
 
-    def _new_session(self) -> requests.Session:
+    def _new_session(self) -> requests.Session | browser_requests.Session:
         session = self._session_factory()
-        session.headers.update({**DEFAULT_REQUEST_HEADERS, "User-Agent": self._user_agent})
+        if self._user_agent is not None:
+            session.headers.update({"User-Agent": self._user_agent})
         return session
 
     def _request_html(
         self,
         *,
         method: str,
-        request: Callable[[], requests.Response],
+        request: Callable[[], requests.Response | browser_requests.Response],
     ) -> str:
         for retry_number in range(self._transient_retry_attempts + 1):
             self._wait_for_request_slot()
             self._requests_started += 1
             try:
                 response = request()
-            except requests.ConnectionError, requests.Timeout:
+            except (
+                requests.ConnectionError,
+                requests.Timeout,
+                browser_requests.exceptions.ConnectionError,
+                browser_requests.exceptions.Timeout,
+            ):
                 if retry_number >= self._transient_retry_attempts:
                     raise
                 self._wait_before_retry(retry_number)
                 continue
 
-            if response.status_code == HTTP_OK_STATUS:
-                return response.text
+            if response.status_code == HTTP_OK_STATUS or _is_waf_challenge(response):
+                return _text_from_ok_response(
+                    response,
+                    method=method,
+                    request_number=self._requests_started,
+                )
             if (
                 response.status_code not in RETRYABLE_STATUS_CODES
                 or retry_number >= self._transient_retry_attempts
@@ -247,6 +257,10 @@ class KiwiHouseSittersClient:
         return remaining
 
 
+def _browser_session() -> browser_requests.Session:
+    return browser_requests.Session(impersonate=DEFAULT_BROWSER_IMPERSONATION)
+
+
 def _validate_request_interval_seconds(interval_seconds: float) -> None:
     if interval_seconds < 0:
         raise ValueError("request_interval_seconds must not be negative")
@@ -260,12 +274,12 @@ def _validate_retry_settings(*, attempts: int, backoff_seconds: float) -> None:
 
 
 def _text_from_ok_response(
-    response: requests.Response,
+    response: requests.Response | browser_requests.Response,
     *,
     method: str,
     request_number: int,
 ) -> str:
-    if response.status_code != HTTP_OK_STATUS:
+    if response.status_code != HTTP_OK_STATUS or _is_waf_challenge(response):
         message = _response_error_message(
             response,
             method=method,
@@ -278,18 +292,28 @@ def _text_from_ok_response(
     return response.text
 
 
-def _is_waf_challenge(response: requests.Response) -> bool:
-    if response.status_code != WAF_CHALLENGE_STATUS:
-        return False
-
+def _is_waf_challenge(response: requests.Response | browser_requests.Response) -> bool:
+    if response.headers.get("cf-mitigated", "").casefold() == "challenge":
+        return True
+    body = response.text.casefold()
     waf_action = response.headers.get("x-amzn-waf-action", "").casefold()
-    return waf_action == "challenge" or any(
-        marker in response.text for marker in ("awsWafCookieDomainList", "window.gokuProps")
+    if response.status_code == WAF_CHALLENGE_STATUS:
+        return waf_action == "challenge" or any(
+            marker in body for marker in ("awswafcookiedomainlist", "window.gokuprops")
+        )
+
+    # Cloudflare serves its browser-verification interstitial as 403, unlike
+    # AWS WAF's 202 challenge. Treat the recognizable interstitial as the
+    # same protective event so the scheduler opens its existing WAF cooldown.
+    return (
+        response.status_code == 403
+        and "cloudflare" in response.headers.get("server", "").casefold()
+        and "<title>just a moment" in body
     )
 
 
 def _response_error_message(
-    response: requests.Response,
+    response: requests.Response | browser_requests.Response,
     *,
     method: str,
     request_number: int,

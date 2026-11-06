@@ -18,13 +18,22 @@ https://www.kiwihousesitters.co.nz/house-sitting-pet-sitting-jobs/search?view=li
 
 The search page appears to be server-side rendered. The initial HTML response contains the listing cards and pagination controls. v1 should use:
 
-- `requests`
+- `curl_cffi` with its Chrome browser profile
 - BeautifulSoup
 
 Do not use Playwright for v1 unless plain HTML scraping stops working.
 
-Filtered searches use a form POST to the same search URL, not query parameters. The
-site can be queried with a `requests.Session`:
+Cloudflare began challenging the plain `requests` client even when a normal
+browser could load listings. A live comparison returned `403` for `requests`
+and `200` with listing cards for `curl_cffi`. The adapter now uses a
+`curl_cffi.requests.Session(impersonate="chrome")`, allowing that profile to
+supply matching TLS/HTTP behavior and browser headers. Applying the previous
+handwritten browser headers to that session reproduced the challenge, so do
+not restore those defaults. This is not a guarantee against future challenges;
+the existing pacing and WAF cooldowns still apply.
+
+Filtered searches use a form POST to the same search URL, not query parameters.
+Each filtered search uses a fresh session:
 
 1. `GET /house-sitting-pet-sitting-jobs/search?view=list` to establish the
    server-side search context for a filtered request.
@@ -112,8 +121,11 @@ one is supplied.
 
 An AWS WAF challenge is identified by HTTP `202` plus the
 `x-amzn-waf-action: challenge` header or the known AWS WAF JavaScript markers.
-It is not retried by the HTTP client because `requests` cannot execute the
-browser challenge. The scheduler logs it explicitly. Auckland retains its
+A Cloudflare browser-verification interstitial is identified by the
+`cf-mitigated: challenge` header, or HTTP `403` with a Cloudflare server header
+and its `Just a moment...` title. Neither challenge
+is retried by the HTTP client because the HTTP transport cannot execute browser
+verification. The scheduler logs either explicitly. Auckland retains its
 normal cadence after broad challenges, while broad work pauses for at least 24
 hours. An Auckland scope challenged directly receives its own 15-minute
 cooldown; no other Auckland scope is paused. Repeated campaign challenges double

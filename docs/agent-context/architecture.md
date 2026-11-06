@@ -4,7 +4,7 @@
 
 - Scheduler/runtime: restartable home-hosted Python supervisor
 - Language: Python
-- Scraping: `requests` + BeautifulSoup
+- Scraping: `curl_cffi` (Chrome browser profile) + BeautifulSoup
 - Database: Supabase/PostgreSQL
 - Alerts: Telegram Bot API
 
@@ -14,7 +14,11 @@ Supabase provides hosted PostgreSQL with a free tier suitable for early developm
 
 Telegram is the primary notification channel. Email is not a v1 channel.
 
-The KiwiHouseSitters search page returns server-side rendered HTML. Filtered searches use a form POST to the base search URL after an initial GET, so v1 should use `requests.Session` and BeautifulSoup, not Playwright.
+The KiwiHouseSitters search page returns server-side rendered HTML. Filtered
+searches use a form POST to the base search URL after an initial GET. The adapter
+uses `curl_cffi` with consistent Chrome TLS/HTTP behavior and headers because
+Cloudflare began challenging plain `requests` sessions. BeautifulSoup handles
+parsing; a full browser is not required for the currently verified fetch path.
 
 Runtime selection and scheduling constraints are documented in
 [scheduling.md](scheduling.md).
