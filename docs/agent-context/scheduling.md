@@ -101,7 +101,8 @@ python -m pet_sitting_palantir --run-continuously --max-pages all
   process keeps running. Failed scopes remain overdue, but their latest direct
   attempt starts a retry cooldown: short-cadence scopes retain their configured
   cadence and scopes with intervals over 60 minutes retry at most hourly.
-- An AWS WAF HTTP 202 JavaScript challenge opens a persisted circuit breaker.
+- An AWS WAF HTTP 202 or recognized Cloudflare browser challenge opens a
+  persisted circuit breaker.
   A broad-scope challenge does not suppress or reschedule the Auckland priority
   phase. Broad work waits 24 hours; further WAF challenges in that campaign
   double the pause up to seven days. The challenged parent attempt converts to

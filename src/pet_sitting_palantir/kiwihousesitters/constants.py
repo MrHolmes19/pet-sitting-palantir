@@ -8,24 +8,8 @@ SEARCH_URL = f"{BASE_URL}{SEARCH_PATH}?view=list"
 
 DEFAULT_MAX_PAGES = 1
 DEFAULT_SCOPE_NAME = "all_nz"
-DEFAULT_USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
-)
-DEFAULT_REQUEST_HEADERS = MappingProxyType(
-    {
-        "User-Agent": DEFAULT_USER_AGENT,
-        "Accept": (
-            "text/html,application/xhtml+xml,application/xml;q=0.9,"
-            "image/avif,image/webp,image/apng,*/*;q=0.8"
-        ),
-        "Accept-Language": "en-NZ,en;q=0.9",
-        "Cache-Control": "no-cache",
-        "Connection": "keep-alive",
-        "Referer": BASE_URL,
-        "Upgrade-Insecure-Requests": "1",
-    }
-)
+# Let curl_cffi keep its TLS/HTTP profile and default headers consistent.
+DEFAULT_BROWSER_IMPERSONATION = "chrome"
 PAGINATION_REQUEST_HEADERS = MappingProxyType(
     {
         "X-Requested-With": "XMLHttpRequest",

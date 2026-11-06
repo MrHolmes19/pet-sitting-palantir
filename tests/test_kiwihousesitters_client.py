@@ -1,5 +1,6 @@
 import pytest
 import requests
+from curl_cffi import requests as browser_requests
 
 from pet_sitting_palantir.kiwihousesitters.client import (
     KiwiHouseSittersClient,
@@ -28,7 +29,10 @@ class FakeSession:
         self,
         responses: FakeResponse
         | requests.RequestException
-        | list[FakeResponse | requests.RequestException],
+        | browser_requests.exceptions.RequestException
+        | list[
+            FakeResponse | requests.RequestException | browser_requests.exceptions.RequestException
+        ],
     ) -> None:
         self.responses = responses if isinstance(responses, list) else [responses]
         self.requested_urls: list[str] = []
@@ -46,14 +50,14 @@ class FakeSession:
         self.requested_urls.append(url)
         self.requested_headers.append(headers)
         response = self.responses.pop(0)
-        if isinstance(response, requests.RequestException):
+        if isinstance(response, Exception):
             raise response
         return response
 
     def post(self, url: str, *, data: object, timeout: int) -> FakeResponse:
         self.posted_requests.append((url, data))
         response = self.responses.pop(0)
-        if isinstance(response, requests.RequestException):
+        if isinstance(response, Exception):
             raise response
         return response
 
@@ -66,14 +70,25 @@ def test_fetch_html_rejects_non_ok_status() -> None:
         client.fetch_html("https://example.test/search")
 
 
-def test_client_uses_browser_like_default_headers() -> None:
+def test_client_uses_consistent_browser_profile(monkeypatch) -> None:
+    options = {}
+    fake_session = FakeSession(FakeResponse(status_code=200))
+
+    def session_factory(**kwargs):
+        options.update(kwargs)
+        return fake_session
+
+    monkeypatch.setattr(browser_requests, "Session", session_factory)
+    KiwiHouseSittersClient(request_interval_seconds=0)
+
+    assert options == {"impersonate": "chrome"}
+    assert fake_session.headers == {}
+
+
+def test_client_supports_explicit_user_agent_override() -> None:
     client = KiwiHouseSittersClient(user_agent="custom-agent", request_interval_seconds=0)
 
     assert client._session.headers["User-Agent"] == "custom-agent"
-    assert client._session.headers["Accept"].startswith("text/html")
-    assert client._session.headers["Accept-Language"] == "en-NZ,en;q=0.9"
-    assert client._session.headers["Referer"] == "https://www.kiwihousesitters.co.nz"
-    assert client._session.headers["Upgrade-Insecure-Requests"] == "1"
 
 
 def test_client_rejects_negative_request_interval() -> None:
@@ -118,9 +133,17 @@ def test_client_retries_transient_statuses_with_exponential_backoff() -> None:
     assert fake_session.requested_urls == ["https://example.test/search"] * 3
 
 
-def test_client_retries_transient_connection_errors() -> None:
+@pytest.mark.parametrize(
+    "error_type",
+    [
+        requests.Timeout,
+        browser_requests.exceptions.Timeout,
+        browser_requests.exceptions.ConnectionError,
+    ],
+)
+def test_client_retries_transient_connection_errors(error_type) -> None:
     fake_session = FakeSession(
-        [requests.Timeout("slow"), FakeResponse(status_code=200, text="recovered")]
+        [error_type("slow"), FakeResponse(status_code=200, text="recovered")]
     )
     client = KiwiHouseSittersClient(
         request_interval_seconds=0,
@@ -192,6 +215,30 @@ def test_client_classifies_waf_challenge_header_without_body_marker() -> None:
 
     with pytest.raises(KiwiHouseSittersWAFChallengeError):
         client.fetch_html("https://example.test/search")
+
+
+@pytest.mark.parametrize(
+    ("status", "headers", "body"),
+    [
+        (403, {"cf-mitigated": "challenge"}, "verification"),
+        (200, {"cf-mitigated": "challenge"}, "verification"),
+        (503, {"cf-mitigated": "challenge"}, "verification"),
+        (403, {"server": "cloudflare"}, "<html><title>Just a moment...</title></html>"),
+    ],
+)
+def test_client_classifies_cloudflare_challenge_without_retrying(status, headers, body) -> None:
+    session = FakeSession(
+        [
+            FakeResponse(status_code=status, headers=headers, text=body),
+            FakeResponse(status_code=200, text="should not be requested"),
+        ]
+    )
+    client = KiwiHouseSittersClient(request_interval_seconds=0, session_factory=lambda: session)
+
+    with pytest.raises(KiwiHouseSittersWAFChallengeError, match="kiwihousesitters_waf_challenge"):
+        client.fetch_html("https://example.test/search")
+
+    assert len(session.requested_urls) == 1
 
 
 def test_filtered_first_page_spaces_get_and_post_requests() -> None:
